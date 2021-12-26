@@ -1,0 +1,18 @@
+mutex: build-{{ .Repository.Revision }}
+pod:
+  containers:
+  - name: build
+    image: golang:1.13-alpine
+    workingDir: /application
+    imagePullPolicy: IfNotPresent
+    command:
+      - sh 
+      - -c
+      - |
+        apk add --no-cache sed curl go yarn git coreutils
+        curl -L https://github.com/bhojpur/gorpa/releases/download/v0.0.5/gorpa_0.0.5_Linux_x86_64.tar.gz | tar xz
+        chmod +x gorpa
+        export PATH=$PWD:$PATH
+        cd /application
+        echo "[build|PHASE] build"
+        gorpa build --piro -Dversion={{ .Name }} -Dcommit={{ .Repository.Revision }} -Ddate="$(date)"
