@@ -1,6 +1,6 @@
 module github.com/bhojpur/piro
 
-go 1.17.5
+go 1.17
 
 require (
 	cloud.google.com/go v0.56.0 // indirect
