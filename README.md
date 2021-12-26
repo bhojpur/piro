@@ -5,7 +5,7 @@ scripting language. Instead, the Bhojpur Piro jobs have run Node, Golang or bash
 
 ---
 - [Installation](#installation)
-  * [Github](#github)
+  * [GitHub](#github)
   * [Configuration](#configuration)
   * [OAuth](#oauth)
 - [Setting up jobs](#setting-up-jobs)
