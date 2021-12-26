@@ -1,0 +1,86 @@
+repositories:
+  github:
+    webhookSecret: my-webhook-secret
+    privateKeyPath: secrets/github-app.pem
+    appID: 000000
+    installationID: 0000000
+    integration:
+      # This section enables users to start Bhojpur Piro jobs by adding PR comments containing "/piro run".
+      pullRequestComments:
+        # To disable that feature set enabled to false.
+        enabled: true
+        # The Bhojpur Piro provides feedback by updating that comment. To disable this feedback set updateComment to false.
+        updateComment: true
+        # To restrict this feature to users with write access to the repo, set this field to true
+        requiresWriteAccess: true
+        # To restrict this feature to users in particular GitHub organisations, add an entry to the requiresOrg list.
+        requiresOrg: []
+
+config:
+  baseURL: https://piro.bhojpur.net
+  # The Bhojpur Piro can run its web-UI readonly, s.t. no one can directly start jobs.
+  # Set this field to true to enable this mode.
+  webReadOnly: false
+  ## By default, the Bhojpur Piro uses an empty-dir to share the application between the init container
+  ## and actual job containers. If you want to use a HostPath mount instead (e.g. for performance reasons),
+  ## set the path here. The Bhojpur Piro will clean up after a job has finished and remove the applications
+  ## it creates.
+  # applicationNodePathPrefix: /mnt/disks/ssd0/builds
+  timeouts:
+    preperation: 10m
+    total: 60m
+  # plugins:
+  #   - name: "cron"
+  #     type:
+  #     - integration
+  #     config:
+  #       tasks:
+  #       - spec: "30 21 * * *"
+  #         repo: github.com/bhojpur/platform:main
+  #         jobPath: .piro/wipe-devstaging.yaml
+
+replicaCount: 1
+
+image:
+  repository: bhojpur/piro
+  tag: latest
+  pullPolicy: Always
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  ui:
+    port: 80
+  grpc:
+    port: 7777
+
+resources:
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #  cpu: 100m
+  #  memory: 128Mi
+  requests:
+   cpu: 100m
+   memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+rbac:
+  create: true
+
+postgresql:
+  enabled: true
+  postgresqlDatabase: piro
+  postgresqlUsername: piro
+  postgresqlPassword: changeme
+
+vouch: {}
