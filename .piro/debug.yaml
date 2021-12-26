@@ -1,0 +1,20 @@
+pod:
+  containers:
+  - name: build
+    image: alpine:latest
+    workingDir: /application
+    imagePullPolicy: IfNotPresent
+    command:
+      - sh 
+      - -c
+      - |
+        sleep 5
+        echo "[build|PHASE] building stuff"
+        for i in $(seq 1 10); do sleep 2; echo "[foo] output $i"; done
+        echo "[url|RESULT] https://github.com/bhojpur/piro the GitHub project"
+        echo "[url|RESULT] https://github.com/bhojpur/tree/{{ .Repository.Ref }} this branch on GitHub"
+        echo "hello world"
+        echo "some more regular logging"
+        echo "{{ .Annotations.msg }}"
+        echo "[docker|RESULT] bhojpur/piro:{{ .Name }} this version's docker image"
+        echo "[docker|RESULT] bhojpur/piro-utils:{{ .Name }} this versions utility image"
