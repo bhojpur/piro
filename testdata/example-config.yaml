@@ -1,0 +1,20 @@
+piro:
+  baseURL: https://bhojpur.net
+  applicationNodePathPrefix: "/mnt/disks/ssd0/builds"
+service:
+  webPort: 8080
+  grpcPort: 7777
+  jobSpecRepos:
+  - 32leaves/test-repo:werft
+kubeconfig: "/home/bhojpur/.kube/config"
+executor:
+  preperationTimeout: 10m
+  totalTimeout: 60m
+storage:
+  logsPath: "/tmp/logs"
+  jobsConnectionString: dbname=piro user=postgres connect_timeout=5 sslmode=disable
+github:
+  webhookSecret: foobar
+  privateKeyPath: testdata/example-app.pem
+  appID: 48144
+  installationID: 5647067
