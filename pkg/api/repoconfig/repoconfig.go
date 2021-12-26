@@ -15,7 +15,7 @@ type C struct {
 // JobStartRule determines if a job will be started
 type JobStartRule struct {
 	Path string                      `yaml:"path"`
-	Expr []*pirotv1.FilterExpression `yaml:"matchesAll"`
+	Expr []*pirov1.FilterExpression  `yaml:"matchesAll"`
 }
 
 // UnmarshalYAML unmarshals the filter expressions
