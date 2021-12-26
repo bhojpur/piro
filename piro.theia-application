@@ -1,0 +1,14 @@
+{
+    "folders": [
+        {"path": "."},
+        {"path": "pkg/webui"},
+        {"path": "plugins/cron"},
+        {"path": "plugins/github-repo"},
+        {"path": "plugins/github-integration"},
+        {"path": "plugins/integration-example"},
+        {"path": "plugins/webhook"}
+    ],
+    "settings": {
+        "go.useLanguageServer": true
+    }
+}
