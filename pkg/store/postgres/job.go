@@ -64,10 +64,10 @@ func (s *JobStore) Store(ctx context.Context, job v1.JobStatus) error {
 		s.metrics.PostgresStoreJobDurationSecond.Observe(time.Since(start).Seconds())
 	}(time.Now())
 
-	marshaler := &jsonpb.Marshaler{
-		EnumsAsInts: true,
+	marshaler := &protojson.MarshalOptions{
+		UseEnumNumbers: true,
 	}
-	serializedJob, err := marshaler.MarshalToString(&job)
+	serializedJob, err := marshaler.Marshal(&job)
 	if err != nil {
 		return err
 	}
@@ -139,7 +139,8 @@ func (s *JobStore) Get(ctx context.Context, name string) (*v1.JobStatus, error) 
 	}
 
 	var res v1.JobStatus
-	err = jsonpb.UnmarshalString(data, &res)
+	unmarshaler := &protojson.UnmarshalOptions{}
+	err = unmarshaler.Unmarshal([]byte(data), &res)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +264,8 @@ func (s *JobStore) Find(ctx context.Context, filter []*v1.FilterExpression, orde
 		}
 
 		var res v1.JobStatus
-		err = jsonpb.UnmarshalString(data, &res)
+		unmarshaler := &protojson.UnmarshalOptions{}
+		err = unmarshaler.Unmarshal([]byte(data), &res)
 		if err != nil {
 			return nil, 0, err
 		}

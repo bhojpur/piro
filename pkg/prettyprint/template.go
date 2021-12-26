@@ -5,7 +5,6 @@ import (
 	"text/template"
 	"time"
 
-	"google.golang.org/protobuf/types/known"
 	tspb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -17,7 +16,7 @@ func formatTemplate(pp *Content) error {
 		New("prettyprint").
 		Funcs(map[string]interface{}{
 			"toRFC3339": func(t *tspb.Timestamp) string {
-				ts, err := ptypes.Timestamp(t)
+				ts, err := tspb.AsTime()
 				if err != nil {
 					return err.Error()
 				}

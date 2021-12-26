@@ -4,15 +4,6 @@ package v1;
 option go_package = "github.com/bhojpur/piro/pkg/api/v1";
 import "piro.proto";
 
-// PiroUI offers services intended for the Bhojpur Piro web user interface
-service PiroUI {
-    // ListJobSpecs returns a list of jobs that can be started through the UI.
-    rpc ListJobSpecs(ListJobSpecsRequest) returns (stream ListJobSpecsResponse) {};
-
-    // IsReadOnly returns true if the UI is readonly.
-    rpc IsReadOnly(IsReadOnlyRequest) returns (IsReadOnlyResponse) {};
-}
-
 message ListJobSpecsRequest{}
 
 message ListJobSpecsResponse {
@@ -34,4 +25,13 @@ message IsReadOnlyRequest {}
 
 message IsReadOnlyResponse {
     bool readonly = 1;
+}
+
+// PiroUI offers services intended for the Bhojpur Piro web user interface
+service PiroUI {
+    // ListJobSpecs returns a list of jobs that can be started through the UI.
+    rpc ListJobSpecs(ListJobSpecsRequest) returns (stream ListJobSpecsResponse) {};
+
+    // IsReadOnly returns true if the UI is readonly.
+    rpc IsReadOnly(IsReadOnlyRequest) returns (IsReadOnlyResponse) {};
 }

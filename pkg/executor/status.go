@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -17,7 +16,7 @@ import (
 func getStatus(obj *corev1.Pod, labels labelSet) (status *v1.JobStatus, err error) {
 	defer func() {
 		if status != nil && status.Phase == v1.JobPhase_PHASE_DONE {
-			status.Metadata.Finished = TimestampNow()
+			status.Metadata.Finished = timestamppb.Now()
 		}
 	}()
 
@@ -31,14 +30,16 @@ func getStatus(obj *corev1.Pod, labels labelSet) (status *v1.JobStatus, err erro
 		return nil, xerrors.Errorf("job has no metadata")
 	}
 	var md v1.JobMetadata
-	err = jsonpb.UnmarshalString(rawmd, &md)
+	unmarshaler := &protojson.UnmarshalOptions{}
+	err = unmarshaler.Unmarshal([]byte(rawmd), &md)
 	if err != nil {
 		return nil, xerrors.Errorf("cannot unmarshal metadata %v :%w", rawmd, err)
 	}
 
 	var results []*v1.JobResult
 	if c, ok := obj.Annotations[labels.AnnotationResults]; ok {
-		err = json.Unmarshal([]byte(c), &results)
+		unmarshaler := &protojson.UnmarshalOptions{}
+		err = unmarshaler.Unmarshal([]byte(c), results)
 		if err != nil {
 			return nil, xerrors.Errorf("cannot unmarshal results: %w", err)
 		}

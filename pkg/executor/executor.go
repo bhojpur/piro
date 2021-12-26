@@ -14,9 +14,7 @@ import (
 	pirov1 "github.com/bhojpur/piro/pkg/api/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"google.golang.org/protobuf/types/known/typepb"
 	log "github.com/sirupsen/logrus"
 	"github.com/technosophos/moniker"
 	"golang.org/x/xerrors"
@@ -217,10 +215,10 @@ func (js *Executor) Start(podspec corev1.PodSpec, metadata pirov1.JobMetadata, o
 		annotations[js.labels.AnnotationSidecars] = strings.Join(opts.Sidecars, " ")
 	}
 
-	metadata.Created = ptypes.TimestampNow()
-	mdjson, err := (&jsonpb.Marshaler{
-		EnumsAsInts: true,
-	}).MarshalToString(&metadata)
+	metadata.Created = timestamppb.Now()
+	mdjson, err := (&protojson.MarshalOptions{
+		UseEnumNumbers: true,
+	}).Marshal(&metadata)
 	if err != nil {
 		return nil, xerrors.Errorf("cannot marshal metadata: %w", err)
 	}
@@ -479,7 +477,7 @@ func (js *Executor) doHousekeeping() {
 				continue
 			}
 
-			created, err := ptypes.Timestamp(status.Metadata.Created)
+			created, err := timestamppb.TimeAs(status.Metadata.Created)
 			if err != nil {
 				log.WithError(err).WithField("name", pod.Name).Warn("cannot perform housekeeping")
 				continue
