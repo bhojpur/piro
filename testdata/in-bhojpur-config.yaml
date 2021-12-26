@@ -1,0 +1,90 @@
+piro:
+  baseURL: https://bhojpur.net
+  applicationNodePathPrefix: "/mnt/disks/ssd0/builds"
+  cleanupJobSpec:
+    terminationGracePeriodSeconds: 10
+service:
+  webPort: 8080
+  grpcPort: 7777
+  prometheusPort: 9500
+  pprofPort: 6060
+  jobSpecRepos:
+  - github.com/shashi-rai/test-repo:piro
+  webReadOnly: false
+kubeconfig: "/home/bhojpur/.kube/k3s.yaml"
+executor:
+  preperationTimeout: 10m
+  totalTimeout: 60m
+storage:
+  logsPath: "/tmp/logs"
+  jobsConnectionString: dbname=piro user=bhojpur connect_timeout=5 sslmode=disable
+  jobsMaxConnections: 10
+plugins:
+  - name: "repo-github"
+    type:
+    - repository
+    config:
+      privateKeyPath: testdata/example-app.pem
+      appID: 48144
+      installationID: 5647067
+    command:
+    - sh
+    - -c
+    - cd plugins/github-repo; go build; cd -; plugins/github-repo/github-repo $*
+    - -s
+  - name: "github-integration"
+    type:
+    - integration
+    config:
+      baseURL: https://bhojpur.net
+      webhookSecret: foobar
+      privateKeyPath: testdata/example-app.pem
+      appID: 48144
+      installationID: 5647067
+      pullRequestComments:
+        enabled: true
+        updateComment: true
+        requiresOrg: []
+        requiresWriteAccess: true
+    command:
+    - sh
+    - -c
+    - cd plugins/github-integration; go build; cd -; plugins/github-integration/github-integration $*
+    - -s
+  - name: "example"
+    type:
+    - integration
+    config:
+      emoji: 🚀
+    command:
+    - sh
+    - -c
+    - cd plugins/integration-example && go run main.go $*
+    - -s
+  - name: "webhook"
+    type:
+    - integration
+    config:
+      notifications:
+      - url: http://localhost:8081
+        contentType: application/json
+        filter: 
+        - phase==done
+        template: '{"text": "{{ .Name }} done"}'
+    command:
+    - sh
+    - -c
+    - cd plugins/webhook && go run main.go $*
+    - -s
+  - name: "cron"
+    type:
+    - integration
+    config:
+      tasks:
+      - spec: "@every 10m"
+        repo: github.com/shashi-rai/test-repo:werft
+    command:
+    - sh
+    - -c
+    - cd plugins/cron && go run main.go $*
+    - -s
