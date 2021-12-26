@@ -1,0 +1,28 @@
+image:
+  file: .bhojpur.Dockerfile
+tasks:
+  - init: go get && go build ./... && go test ./...
+    command: |
+      echo $SECRET_KUBECONFIG | base64 -d > ~/.kube/config
+      sleep 10
+      echo CREATE DATABASE piro | psql -f -
+      mkdir /tmp/logs
+      find . -name "go.mod" | while read f; do echo cd $(dirname $f); echo go get -v ./...; echo cd -; done | sh
+      unset PGHOSTADDR
+      gp await-port 3000
+      go run server.go run testdata/in-bhojpur-config.yaml --debug-webui-proxy http://localhost:3000
+  - init: yarn --cwd pkg/webui
+    command: yarn --cwd pkg/webui start
+    openMode: split-right
+  - command: k3s server --disable-agent
+    openMode: split-right
+ports:
+  - port: 6443
+  - port: 8080
+    onOpen: open-preview
+  - port: 2999-3001
+    onOpen: ignore
+applicationLocation: piro/piro.theia-application
+vscode:
+  extensions:
+    - zxh404.vscode-proto3@0.3.0
