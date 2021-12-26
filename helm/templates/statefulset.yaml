@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "piro.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "piro.name" . }}
+    helm.sh/chart: {{ include "piro.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  serviceName: piro
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "piro.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - metadata:
+      name: logs
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 10Gi
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "piro.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      serviceAccountName: {{ include "piro.fullname" . }}
+      volumes:
+      - name: secrets
+        secret:
+          secretName: {{ include "piro.fullname" . }}-secret
+      - name: config
+        configMap:
+          name: {{ include "piro.fullname" . }}-config
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: [ "run", "--verbose", "/mnt/config/config.yaml" ]
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: grpc
+              containerPort: 7777
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+          volumeMounts:
+          - name: config
+            mountPath: "/mnt/config"
+            readOnly: true
+          - name: secrets
+            mountPath: "/mnt/secrets"
+            readOnly: true
+          - name: logs
+            mountPath: "/mnt/logs"
+            readOnly: false
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
