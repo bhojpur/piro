@@ -1,0 +1,13 @@
+pod:
+  containers:
+  - name: node-debug
+    image: node:13-alpine
+    workingDir: /application
+    imagePullPolicy: IfNotPresent
+    command:
+    - sh 
+    - -c
+    - |
+      npm install shelljs
+      printf '{{ toJson . }}' > context.json
+      node --inspect .piro/node-debug.js
