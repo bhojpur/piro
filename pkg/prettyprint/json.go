@@ -1,6 +1,6 @@
 package prettyprint
 
-import "github.com/gogo/protobuf/jsonpb"
+import "google.golang.org/protobuf/encoding/protojson"
 
 // JSONFormat formats everythign as JSON
 const JSONFormat Format = "json"

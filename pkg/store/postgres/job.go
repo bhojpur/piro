@@ -9,7 +9,7 @@ import (
 
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
 	"github.com/bhojpur/piro/pkg/store"
-	"github.com/golang/protobuf/jsonpb"
+	"google.golang.org/protobuf/encoding/protojson"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"

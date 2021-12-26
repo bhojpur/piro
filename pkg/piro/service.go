@@ -18,8 +18,8 @@ import (
 	"github.com/bhojpur/piro/pkg/filterexpr"
 	"github.com/bhojpur/piro/pkg/logcutter"
 	"github.com/bhojpur/piro/pkg/store"
-	"github.com/gogo/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	log "github.com/sirupsen/logrus"
 	"github.com/technosophos/moniker"
 	"golang.org/x/xerrors"
@@ -269,7 +269,7 @@ func (srv *Service) StartJob(ctx context.Context, req *v1.StartJobRequest) (resp
 
 	var waitUntil time.Time
 	if req.WaitUntil != nil {
-		waitUntil, err = ptypes.Timestamp(req.WaitUntil)
+		waitUntil, err = Timestamp(req.WaitUntil)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "waitUntil is invalid: %v", err)
 		}
@@ -378,7 +378,7 @@ func (srv *Service) StartFromPreviousJob(ctx context.Context, req *v1.StartFromP
 
 	var waitUntil time.Time
 	if req.WaitUntil != nil {
-		waitUntil, err = ptypes.Timestamp(req.WaitUntil)
+		waitUntil, err = Timestamp(req.WaitUntil)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "waitUntil is invalid: %v", err)
 		}

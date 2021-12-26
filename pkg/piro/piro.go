@@ -19,7 +19,8 @@ import (
 	"github.com/bhojpur/piro/pkg/executor"
 	"github.com/bhojpur/piro/pkg/logcutter"
 	"github.com/bhojpur/piro/pkg/store"
-	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/protobuf/types/known/typepb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"github.com/olebedev/emitter"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/segmentio/textio"
@@ -160,7 +161,7 @@ func (srv *Service) Start() error {
 			cancelJob(err)
 			continue
 		}
-		waitUntil, err := ptypes.Timestamp(j.Conditions.WaitUntil)
+		waitUntil, err := Timestamp(j.Conditions.WaitUntil)
 		if err != nil {
 			cancelJob(err)
 			continue
@@ -459,7 +460,7 @@ func (srv *Service) RunJob(ctx context.Context, name string, metadata v1.JobMeta
 			status.Conditions = &v1.JobConditions{Success: false, FailureCount: 1}
 			status.Metadata = &metadata
 			if status.Metadata.Created == nil {
-				status.Metadata.Created = ptypes.TimestampNow()
+				status.Metadata.Created = TimestampNow()
 			}
 			status.Details = (*perr).Error()
 			if logs != nil {
@@ -627,7 +628,7 @@ func (srv *Service) cleanupJobApplication(s *v1.JobStatus) {
 		Owner:      s.Metadata.Owner,
 		Repository: s.Metadata.Repository,
 		Trigger:    v1.JobTrigger_TRIGGER_UNKNOWN,
-		Created:    ptypes.TimestampNow(),
+		Created:    TimestampNow(),
 		Annotations: []*v1.Annotation{
 			{
 				Key:   annotationCleanupJob,

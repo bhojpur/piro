@@ -5,8 +5,8 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
-	tspb "github.com/golang/protobuf/ptypes/timestamp"
+	"google.golang.org/protobuf/types/known"
+	tspb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // TemplateFormat uses Go templates and tabwriter for formatting content

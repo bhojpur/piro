@@ -7,9 +7,8 @@ import (
 	"time"
 
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
-	"github.com/gogo/protobuf/jsonpb"
-	"github.com/golang/protobuf/ptypes"
-	"github.com/golang/protobuf/ptypes/timestamp"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"golang.org/x/xerrors"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -18,7 +17,7 @@ import (
 func getStatus(obj *corev1.Pod, labels labelSet) (status *v1.JobStatus, err error) {
 	defer func() {
 		if status != nil && status.Phase == v1.JobPhase_PHASE_DONE {
-			status.Metadata.Finished = ptypes.TimestampNow()
+			status.Metadata.Finished = TimestampNow()
 		}
 	}()
 
@@ -55,7 +54,7 @@ func getStatus(obj *corev1.Pod, labels labelSet) (status *v1.JobStatus, err erro
 		if err != nil {
 			return nil, xerrors.Errorf("cannot parse %s annotation: %w", annotationWaitUntil, err)
 		}
-		waitUntil, err = ptypes.TimestampProto(ts)
+		waitUntil, err = TimestampProto(ts)
 		if err != nil {
 			return nil, xerrors.Errorf("cannot convert %s annotation: %w", annotationWaitUntil, err)
 		}

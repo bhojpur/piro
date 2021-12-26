@@ -12,8 +12,11 @@ import (
 	"time"
 
 	pirov1 "github.com/bhojpur/piro/pkg/api/v1"
-	"github.com/gogo/protobuf/jsonpb"
-	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+	"google.golang.org/protobuf/types/known/typepb"
 	log "github.com/sirupsen/logrus"
 	"github.com/technosophos/moniker"
 	"golang.org/x/xerrors"
@@ -442,7 +445,7 @@ func (js *Executor) writeEventTraceLog(status *pirov1.JobStatus, obj *corev1.Pod
 
 	type eventTraceEntry struct {
 		Time   string             `yaml:"time"`
-		Status *pirov1.JobStatus `yaml:"status"`
+		Status *pirov1.JobStatus  `yaml:"status"`
 		Job    *corev1.Pod        `yaml:"job"`
 	}
 	// If writing the event trace log fails that does nothing to harm the function of ws-manager.
