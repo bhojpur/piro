@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package repoplugin;
+option go_package = "common";
+
+import "api/v1/piro.proto";
+
+
+service RepositoryPlugin {
+    // RepoHost returns the host which this plugins integrates with
+    rpc RepoHost(RepoHostRequest) returns (RepoHostResponse) {};
+
+    // Resolve resolves the repo's revision based on its ref(erence) 
+    rpc Resolve(ResolveRequest) returns (ResolveResponse) {};
+
+    // ContentInitContainer produces the init container YAML required to initialize 
+    // the build context from this repository in /application.
+    rpc ContentInitContainer(ContentInitContainerRequest) returns (ContentInitContainerResponse) {};
+
+    // Download downloads a file from the repository.
+    rpc Download(DownloadRequest) returns (DownloadResponse) {};
+
+    // ListFiles lists all files in a directory.
+    rpc ListFiles(ListFilesRequest) returns (ListFilesReponse) {};
+
+    // GetRemoteAnnotations extracts Bhojpur Piro annotations form information associated
+    // with a particular commit, e.g. the commit message, PRs or merge requests.
+    // Implementors can expect the revision of the repo object to be set.
+    rpc GetRemoteAnnotations(GetRemoteAnnotationsRequest) returns (GetRemoteAnnotationsResponse) {};
+}
+
+message RepoHostRequest {}
+
+message RepoHostResponse {
+    string host = 1;
+}
+
+message ResolveRequest {
+    v1.Repository repository = 1;
+}
+
+message ResolveResponse {
+    v1.Repository repository = 1;
+}
+
+message ContentInitContainerRequest {
+    v1.Repository repository = 1;
+}
+
+message ContentInitContainerResponse {
+    bytes container = 1;
+}
+
+message DownloadRequest {
+    v1.Repository repository = 1;
+    string path = 2;
+}
+
+message DownloadResponse {
+    bytes content = 1;
+}
+
+message ListFilesRequest {
+    v1.Repository repository = 1;
+    string path = 2;
+}
+
+message ListFilesReponse {
+    repeated string paths = 1;
+}
+
+message GetRemoteAnnotationsRequest {
+    v1.Repository repository = 1;
+}
+
+message GetRemoteAnnotationsResponse {
+    map<string, string> annotations = 1;
+}
