@@ -10,7 +10,7 @@ const JSONFormat Format = "json"
 func formatJSON(pp *Content) error {
 	enc := &protojson.MarshalOptions{
 		UseEnumNumbers: false,
-		Indent:      "  ",
+		Indent:         "  ",
 	}
 	return enc.Marshal(pp.Writer, pp.Obj)
 }

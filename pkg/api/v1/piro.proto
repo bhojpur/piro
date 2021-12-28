@@ -45,8 +45,8 @@ message StartLocalJobRequest {
         JobMetadata metadata = 1;
         bytes config_yaml = 2;
         bytes job_yaml = 3;
-        bytes workspace_tar = 4;
-        bool workspace_tar_done = 5;
+        bytes application_tar = 4;
+        bool application_tar_done = 5;
     };
 }
 

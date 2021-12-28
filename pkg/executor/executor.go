@@ -13,7 +13,6 @@ import (
 
 	pirov1 "github.com/bhojpur/piro/pkg/api/v1"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	log "github.com/sirupsen/logrus"
 	"github.com/technosophos/moniker"
@@ -222,7 +221,7 @@ func (js *Executor) Start(podspec corev1.PodSpec, metadata pirov1.JobMetadata, o
 	if err != nil {
 		return nil, xerrors.Errorf("cannot marshal metadata: %w", err)
 	}
-	annotations[js.labels.AnnotationMetadata] = mdjson
+	annotations[js.labels.AnnotationMetadata] = string(mdjson)
 
 	if podspec.RestartPolicy != corev1.RestartPolicyNever && podspec.RestartPolicy != corev1.RestartPolicyOnFailure {
 		podspec.RestartPolicy = corev1.RestartPolicyOnFailure
@@ -477,7 +476,7 @@ func (js *Executor) doHousekeeping() {
 				continue
 			}
 
-			created, err := timestamppb.TimeAs(status.Metadata.Created)
+			created := status.Metadata.Created.AsTime()
 			if err != nil {
 				log.WithError(err).WithField("name", pod.Name).Warn("cannot perform housekeeping")
 				continue

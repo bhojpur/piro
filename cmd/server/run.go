@@ -43,11 +43,11 @@ import (
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
 	"github.com/bhojpur/piro/pkg/executor"
 	"github.com/bhojpur/piro/pkg/logcutter"
+	"github.com/bhojpur/piro/pkg/piro"
 	plugin "github.com/bhojpur/piro/pkg/plugin/host"
 	"github.com/bhojpur/piro/pkg/store"
 	"github.com/bhojpur/piro/pkg/store/postgres"
 	"github.com/bhojpur/piro/pkg/version"
-	"github.com/bhojpur/piro/pkg/piro"
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -68,6 +68,7 @@ var runCmd = &cobra.Command{
 	Short: "Starts the Bhojpur Piro server",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		var theServer v1.PiroServiceServer
 		if v, _ := cmd.Flags().GetBool("verbose"); v {
 			log.SetLevel(log.DebugLevel)
 		}
@@ -161,7 +162,7 @@ var runCmd = &cobra.Command{
 			cfg.Piro.DebugProxy = val
 		}
 
-		plugins, err := plugin.Start(cfg.Plugins, service)
+		plugins, err := plugin.Start(cfg.Plugins, theServer, *service)
 		if err != nil {
 			log.WithError(err).Fatal("cannot start plugins")
 		}
@@ -199,8 +200,8 @@ var runCmd = &cobra.Command{
 			// connections anyways.
 			grpc.KeepaliveParams(keepalive.ServerParameters{MaxConnectionIdle: 15 * time.Minute}),
 		}
-		go startGRPC(service, fmt.Sprintf(":%d", cfg.Service.GRPCPort), grpcOpts...)
-		go startWeb(service, uiservice, fmt.Sprintf(":%d", cfg.Service.WebPort), startWebOpts{
+		go startGRPC(theServer, service, fmt.Sprintf(":%d", cfg.Service.GRPCPort), grpcOpts...)
+		go startWeb(theServer, service, uiservice, fmt.Sprintf(":%d", cfg.Service.WebPort), startWebOpts{
 			DebugProxy:  cfg.Piro.DebugProxy,
 			ReadOpsOnly: cfg.Service.WebReadOnly,
 			GRPCOpts:    grpcOpts,
@@ -259,7 +260,7 @@ type startWebOpts struct {
 }
 
 // startWeb starts the Bhojpur Piro web UI service
-func startWeb(service *piro.Service, uiservice v1.PiroUIServer, addr string, opts startWebOpts) {
+func startWeb(svr v1.PiroServiceServer, service *piro.Service, uiservice v1.PiroUIServer, addr string, opts startWebOpts) {
 	var webuiServer http.Handler
 	if opts.DebugProxy != "" {
 		tgt, err := url.Parse(opts.DebugProxy)
@@ -324,20 +325,20 @@ func startWeb(service *piro.Service, uiservice v1.PiroUIServer, addr string, opt
 	}
 }
 
-// startGRPC starts the Bhojpur Piro GRPC service
-func startGRPC(service v1.PiroServiceServer, addr string, opts ...grpc.ServerOption) {
+// startGRPC starts the Bhojpur Piro - gRPC service
+func startGRPC(service v1.PiroServiceServer, svc piroService, addr string, opts ...grpc.ServerOption) {
 	grpcServer := grpc.NewServer(opts...)
 	v1.RegisterPiroServiceServer(grpcServer, service)
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.WithError(err).Error("cannot start GRPC server")
+		log.WithError(err).Error("cannot start Bhojpur Piro - gRPC server")
 	}
 
-	log.WithField("addr", addr).Info("serving Bhojpur Piro GRPC service")
+	log.WithField("addr", addr).Info("serving Bhojpur Piro - gRPC service")
 	err = grpcServer.Serve(lis)
 	if err != nil {
-		log.WithError(err).Error("cannot start Bhojpur Piro GRPC server")
+		log.WithError(err).Error("cannot start Bhojpur Piro - gRPC server")
 	}
 }
 
@@ -470,7 +471,7 @@ func init() {
 
 // Config configures the Bhojpur Piro server
 type Config struct {
-	Piro   piro.Config `yaml:"piro"`
+	Piro    piro.Config `yaml:"piro"`
 	Service struct {
 		WebPort            int      `yaml:"webPort"`
 		GRPCPort           int      `yaml:"grpcPort"`

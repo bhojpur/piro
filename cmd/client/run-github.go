@@ -38,6 +38,7 @@ import (
 	"golang.org/x/xerrors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const maxSideloadSizeBytes = 3 * 1024 * 1024
@@ -117,7 +118,7 @@ var runGithubCmd = &cobra.Command{
 			return err
 		}
 		if waitUntil != nil {
-			req.WaitUntil, err = ptypes.TimestampProto(*waitUntil)
+			req.WaitUntil = timestamppb.New(*waitUntil)
 			if err != nil {
 				return err
 			}

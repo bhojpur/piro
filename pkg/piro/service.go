@@ -12,19 +12,18 @@ import (
 	"sync"
 	"time"
 
-	termtohtml "github.com/buildkite/terminal-to-html"
 	"github.com/bhojpur/piro/pkg/api/repoconfig"
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
 	"github.com/bhojpur/piro/pkg/filterexpr"
 	"github.com/bhojpur/piro/pkg/logcutter"
 	"github.com/bhojpur/piro/pkg/store"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
+	termtohtml "github.com/buildkite/terminal-to-html"
 	log "github.com/sirupsen/logrus"
 	"github.com/technosophos/moniker"
 	"golang.org/x/xerrors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"gopkg.in/yaml.v3"
 )
 
@@ -53,8 +52,8 @@ func (srv *Service) StartLocalJob(inc v1.PiroService_StartLocalJobServer) error 
 		phase      int
 	)
 	const (
-		phaseConfigYaml   = 0
-		phaseJobYaml      = 1
+		phaseConfigYaml     = 0
+		phaseJobYaml        = 1
 		phaseApplicationTar = 2
 	)
 	for {

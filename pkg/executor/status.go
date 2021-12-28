@@ -6,9 +6,9 @@ import (
 	"time"
 
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
+	"golang.org/x/xerrors"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"golang.org/x/xerrors"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -49,16 +49,13 @@ func getStatus(obj *corev1.Pod, labels labelSet) (status *v1.JobStatus, err erro
 	_, canReplay := obj.Annotations[annotationCanReplay]
 
 	annotationWaitUntil := labels.AnnotationWaitUntil
-	var waitUntil *timestamp.Timestamp
+	var waitUntil *timestamppb.Timestamp
 	if wt, ok := obj.Annotations[annotationWaitUntil]; ok {
 		ts, err := time.Parse(time.RFC3339, wt)
 		if err != nil {
 			return nil, xerrors.Errorf("cannot parse %s annotation: %w", annotationWaitUntil, err)
 		}
-		waitUntil, err = TimestampProto(ts)
-		if err != nil {
-			return nil, xerrors.Errorf("cannot convert %s annotation: %w", annotationWaitUntil, err)
-		}
+		waitUntil = timestamppb.New(ts)
 	}
 
 	status = &v1.JobStatus{

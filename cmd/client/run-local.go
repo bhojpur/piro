@@ -148,8 +148,8 @@ var runLocalCmd = &cobra.Command{
 				}
 
 				err = srv.Send(&v1.StartLocalJobRequest{
-					Content: &v1.StartLocalJobRequest_WorkspaceTar{
-						WorkspaceTar: buf[:n],
+					Content: &v1.StartLocalJobRequest_ApplicationTar{
+						ApplicationTar: buf[:n],
 					},
 				})
 				if err != nil {
@@ -158,10 +158,10 @@ var runLocalCmd = &cobra.Command{
 			}
 			if err == io.EOF {
 				// we're done here
-				log.Debug("done uploading workspace content")
+				log.Debug("done uploading application content")
 				err = srv.Send(&v1.StartLocalJobRequest{
-					Content: &v1.StartLocalJobRequest_WorkspaceTarDone{
-						WorkspaceTarDone: true,
+					Content: &v1.StartLocalJobRequest_ApplicationTarDone{
+						ApplicationTarDone: true,
 					},
 				})
 				if err != nil {

@@ -16,11 +16,8 @@ func formatTemplate(pp *Content) error {
 		New("prettyprint").
 		Funcs(map[string]interface{}{
 			"toRFC3339": func(t *tspb.Timestamp) string {
-				ts, err := tspb.AsTime()
-				if err != nil {
-					return err.Error()
-				}
-				return ts.Format(time.RFC3339)
+				ts := tspb.Timestamp(*t)
+				return ts.AsTime().Format(time.RFC3339)
 			},
 		}).
 		Parse(pp.Template)

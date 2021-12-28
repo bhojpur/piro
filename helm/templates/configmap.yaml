@@ -11,7 +11,7 @@ data:
   "config.yaml": |
     piro:
       baseURL: {{ .Values.config.baseURL }}
-      workspaceNodePathPrefix: {{ .Values.config.workspaceNodePathPrefix }}
+      applicationNodePathPrefix: {{ .Values.config.applicationNodePathPrefix }}
     service:
       webReadOnly: {{ .Values.config.webReadOnly }}
       webPort: 8080

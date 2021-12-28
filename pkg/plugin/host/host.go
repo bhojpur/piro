@@ -16,8 +16,8 @@ import (
 	"time"
 
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
-	"github.com/bhojpur/piro/pkg/plugin/common"
 	"github.com/bhojpur/piro/pkg/piro"
+	"github.com/bhojpur/piro/pkg/plugin/common"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
 	"google.golang.org/grpc"
@@ -44,6 +44,7 @@ type Plugins struct {
 
 	sockets      map[string]string
 	piroService  v1.PiroServiceServer
+	serviceConf  piro.Service
 	repoProvider *compoundRepositoryProvider
 }
 
@@ -69,7 +70,7 @@ type Error struct {
 }
 
 // Start starts all configured plugins
-func Start(cfg Config, srv v1.PiroServiceServer) (*Plugins, error) {
+func Start(cfg Config, srv v1.PiroServiceServer, svc piro.Service) (*Plugins, error) {
 	errchan, stopchan := make(chan Error), make(chan struct{})
 
 	plugins := &Plugins{

@@ -26,6 +26,7 @@ import (
 
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // runPreviousJobCmd represents the triggerRemote command
@@ -75,7 +76,7 @@ var runPreviousJobCmd = &cobra.Command{
 			return err
 		}
 		if waitUntil != nil {
-			req.WaitUntil, err = ptypes.TimestampProto(*waitUntil)
+			req.WaitUntil = timestamppb.New(*waitUntil)
 			if err != nil {
 				return err
 			}
