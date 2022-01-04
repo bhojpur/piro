@@ -70,14 +70,14 @@ type Error struct {
 }
 
 // Start starts all configured plugins
-func Start(cfg Config, srv v1.PiroServiceServer, svc piro.Service) (*Plugins, error) {
+func Start(cfg Config, srv *v1.PiroServiceServer, svc *piro.Service) (*Plugins, error) {
 	errchan, stopchan := make(chan Error), make(chan struct{})
 
 	plugins := &Plugins{
 		Errchan:      errchan,
 		stopchan:     stopchan,
 		sockets:      make(map[string]string),
-		piroService:  srv,
+		piroService:  *srv,
 		repoProvider: &compoundRepositoryProvider{},
 	}
 

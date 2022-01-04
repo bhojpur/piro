@@ -4,7 +4,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// YAMLFormat formats everythign as YAML
+// YAMLFormat formats everything as YAML
 const YAMLFormat Format = "yaml"
 
 func formatYAML(pp *Content) error {

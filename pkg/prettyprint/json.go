@@ -2,15 +2,23 @@ package prettyprint
 
 import (
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 // JSONFormat formats everything as JSON
 const JSONFormat Format = "json"
 
 func formatJSON(pp *Content) error {
-	enc := &protojson.MarshalOptions{
-		UseEnumNumbers: false,
-		Indent:         "  ",
+	ProtobufToJSON(pp.Obj)
+	return nil
+}
+
+func ProtobufToJSON(message proto.Message) (string, error) {
+	marshaler := protojson.MarshalOptions{
+		Indent:          "  ",
+		UseProtoNames:   true,
+		EmitUnpopulated: true,
 	}
-	return enc.Marshal(pp.Writer, pp.Obj)
+	b, err := marshaler.Marshal(message)
+	return string(b), err
 }

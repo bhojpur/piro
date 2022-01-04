@@ -23,7 +23,7 @@ import (
 	"golang.org/x/xerrors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/encoding/protojson"
 	"gopkg.in/yaml.v3"
 )
 
@@ -159,7 +159,10 @@ func (srv *Service) StartGitHubJob(ctx context.Context, req *v1.StartGitHubJobRe
 
 // StartJob starts a new job based on its specification.
 func (srv *Service) StartJob(ctx context.Context, req *v1.StartJobRequest) (resp *v1.StartJobResponse, err error) {
-	log.WithField("req", proto.MarshalTextString(req)).Info("StartJob request")
+	reqjson, err := (&protojson.MarshalOptions{UseEnumNumbers: true}).Marshal(req)
+	if err == nil {
+		log.WithField("StartJob request: ", reqjson)
+	}
 
 	md := req.Metadata
 	err = srv.RepositoryProvider.Resolve(ctx, md.Repository)
@@ -268,7 +271,7 @@ func (srv *Service) StartJob(ctx context.Context, req *v1.StartJobRequest) (resp
 
 	var waitUntil time.Time
 	if req.WaitUntil != nil {
-		waitUntil, err = Timestamp(req.WaitUntil)
+		waitUntil = req.WaitUntil.AsTime()
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "waitUntil is invalid: %v", err)
 		}
@@ -377,7 +380,7 @@ func (srv *Service) StartFromPreviousJob(ctx context.Context, req *v1.StartFromP
 
 	var waitUntil time.Time
 	if req.WaitUntil != nil {
-		waitUntil, err = Timestamp(req.WaitUntil)
+		waitUntil = req.WaitUntil.AsTime()
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "waitUntil is invalid: %v", err)
 		}

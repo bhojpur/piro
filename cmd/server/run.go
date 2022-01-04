@@ -62,13 +62,16 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+var theServer *v1.PiroServiceServer
+var service *piro.Service
+var theUIServer *v1.PiroUIServer
+
 // runCmd represents the run command
 var runCmd = &cobra.Command{
 	Use:   "run <config.json>",
 	Short: "Starts the Bhojpur Piro server",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var theServer v1.PiroServiceServer
 		if v, _ := cmd.Flags().GetBool("verbose"); v {
 			log.SetLevel(log.DebugLevel)
 		}
@@ -162,7 +165,7 @@ var runCmd = &cobra.Command{
 			cfg.Piro.DebugProxy = val
 		}
 
-		plugins, err := plugin.Start(cfg.Plugins, theServer, *service)
+		plugins, err := plugin.Start(cfg.Plugins, theServer, service)
 		if err != nil {
 			log.WithError(err).Fatal("cannot start plugins")
 		}
@@ -200,8 +203,8 @@ var runCmd = &cobra.Command{
 			// connections anyways.
 			grpc.KeepaliveParams(keepalive.ServerParameters{MaxConnectionIdle: 15 * time.Minute}),
 		}
-		go startGRPC(theServer, service, fmt.Sprintf(":%d", cfg.Service.GRPCPort), grpcOpts...)
-		go startWeb(theServer, service, uiservice, fmt.Sprintf(":%d", cfg.Service.WebPort), startWebOpts{
+		go startGRPC(*theServer, service, fmt.Sprintf(":%d", cfg.Service.GRPCPort), grpcOpts...)
+		go startWeb(theServer, theUIServer, *uiservice, fmt.Sprintf(":%d", cfg.Service.WebPort), startWebOpts{
 			DebugProxy:  cfg.Piro.DebugProxy,
 			ReadOpsOnly: cfg.Service.WebReadOnly,
 			GRPCOpts:    grpcOpts,
@@ -260,7 +263,7 @@ type startWebOpts struct {
 }
 
 // startWeb starts the Bhojpur Piro web UI service
-func startWeb(svr v1.PiroServiceServer, service *piro.Service, uiservice v1.PiroUIServer, addr string, opts startWebOpts) {
+func startWeb(svr *v1.PiroServiceServer, uisvr *v1.PiroUIServer, uiservice piro.UIService, addr string, opts startWebOpts) {
 	var webuiServer http.Handler
 	if opts.DebugProxy != "" {
 		tgt, err := url.Parse(opts.DebugProxy)
@@ -304,8 +307,8 @@ func startWeb(svr v1.PiroServiceServer, service *piro.Service, uiservice v1.Piro
 	}
 
 	grpcServer := grpc.NewServer(grpcOpts...)
-	v1.RegisterPiroServiceServer(grpcServer, service)
-	v1.RegisterPiroUIServer(grpcServer, uiservice)
+	v1.RegisterPiroServiceServer(grpcServer, *theServer)
+	v1.RegisterPiroUIServer(grpcServer, *theUIServer)
 	grpcWebServer := grpcweb.WrapServer(grpcServer)
 
 	mux := http.NewServeMux()
@@ -326,7 +329,7 @@ func startWeb(svr v1.PiroServiceServer, service *piro.Service, uiservice v1.Piro
 }
 
 // startGRPC starts the Bhojpur Piro - gRPC service
-func startGRPC(service v1.PiroServiceServer, svc piroService, addr string, opts ...grpc.ServerOption) {
+func startGRPC(service v1.PiroServiceServer, svc *piro.Service, addr string, opts ...grpc.ServerOption) {
 	grpcServer := grpc.NewServer(opts...)
 	v1.RegisterPiroServiceServer(grpcServer, service)
 
@@ -393,7 +396,7 @@ func serveVersion(w http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(w).Encode(info)
 }
 
-// hstsHandler wraps an http.HandlerFunc sfuch that it sets the HSTS header.
+// hstsHandler wraps an http.HandlerFunc such that it sets the HSTS header.
 func hstsHandler(fn http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")

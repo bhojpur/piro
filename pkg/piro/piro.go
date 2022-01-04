@@ -19,13 +19,12 @@ import (
 	"github.com/bhojpur/piro/pkg/executor"
 	"github.com/bhojpur/piro/pkg/logcutter"
 	"github.com/bhojpur/piro/pkg/store"
-	"google.golang.org/protobuf/types/known/typepb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"github.com/olebedev/emitter"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/segmentio/textio"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	k8sjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
@@ -161,7 +160,7 @@ func (srv *Service) Start() error {
 			cancelJob(err)
 			continue
 		}
-		waitUntil, err := Timestamp(j.Conditions.WaitUntil)
+		waitUntil := j.Conditions.WaitUntil.AsTime()
 		if err != nil {
 			cancelJob(err)
 			continue
@@ -460,7 +459,7 @@ func (srv *Service) RunJob(ctx context.Context, name string, metadata v1.JobMeta
 			status.Conditions = &v1.JobConditions{Success: false, FailureCount: 1}
 			status.Metadata = &metadata
 			if status.Metadata.Created == nil {
-				status.Metadata.Created = TimestampNow()
+				status.Metadata.Created = timestamppb.Now()
 			}
 			status.Details = (*perr).Error()
 			if logs != nil {
@@ -628,7 +627,7 @@ func (srv *Service) cleanupJobApplication(s *v1.JobStatus) {
 		Owner:      s.Metadata.Owner,
 		Repository: s.Metadata.Repository,
 		Trigger:    v1.JobTrigger_TRIGGER_UNKNOWN,
-		Created:    TimestampNow(),
+		Created:    timestamppb.Now(),
 		Annotations: []*v1.Annotation{
 			{
 				Key:   annotationCleanupJob,
