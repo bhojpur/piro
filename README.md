@@ -1,7 +1,8 @@
-# Bhojpur Piro - Kubernetes-native CI
-A simple Kubernetes-native CI system applied by the Bhojpur.NET Platform. It knows no pipelines, just the _jobs_ and each _job_
-is a Kubernetes **pod**. What you do in that _pod_ is up to you. We do not impose a "declarative pipeline syntax" or some groovy
-scripting language. Instead, the Bhojpur Piro jobs have run Node, Golang or bash scripts in production environments.
+# Bhojpur Piro - CI/CD using NanoVMs, Docker, Kubernetes
+A simple CI/CD system applied by the Bhojpur.NET Platform using Kubernetes, Docker, and/or NanoVMs. It knows no pipelines, just the _jobs_
+and each _job_ could be a Unikernel application and/or Kubernetes **pod**. What you do in that _pod_ is up to you. We do not impose any
+"declarative pipeline syntax" or some groovy scripting language. Instead, the Bhojpur Piro jobs have run Node, Golang, or Bash scripts in
+production environments. Any standard Git repository platform could be integrated with Bhojpur Piro.
 
 ---
 - [Installation](#installation)
@@ -66,7 +67,7 @@ The helm chart's `values.yaml` is the reference for chart's configuration surfac
 | `repositories.github.appID` | AppID of your GitHub application. See [GitHub setup](#github) | `secrets/github-app.com` |
 | `repositories.github.installationID` | InstallationID of your GitHub application. Have a look at the _Advanced_ page of your GitHub app to find thi s ID. | `secrets/github-app.com` |
 | `config.baseURL` | URL of your Bhojpur Piro installation | `https://piro.bhojpur.net` |
-| `config.timeouts.preperation` | Time a job can take to initialize | `10m` |
+| `config.timeouts.preparation` | Time a job can take to initialize | `10m` |
 | `config.timeouts.total` | Total time a job can take | `60m` |
 | `image.repository` | Image repository | `bhojpur/piro` |
 | `image.tag` | Image tag | `latest` |
@@ -148,7 +149,7 @@ The default cutter in the Bhojpur Piro expects the following syntax:
 > **Tip**: You can produce this kind of log output using the Bhojpur Piro CLI: `piro log`
 
 ## Command Line Interface
-The Bhojpur Piro sports a powerful CI which can be used to create, list, start and listen to jobs.
+The Bhojpur Piro sports a powerful CI which can be used to create, list, start and listen to jobs (e.g. Unikernel applications).
 
 ### Installation
 The Bhojpur Piro CLI is available on the [GitHub release page](https://repositories.github.com/bhojpur/piro/releases), or using this one-liner:
@@ -158,7 +159,7 @@ curl -L bhojpur.net/get-cli.sh | sh
 
 ### Usage
 ```
-The Bhojpur Piro is a very simple GitHub triggered and Kubernetes powered CI system
+The Bhojpur Piro is a very simple GitHub triggered, Unikernel and/or Kubernetes powered CI system.
 
 Usage:
   piro [command]
