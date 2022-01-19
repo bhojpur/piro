@@ -1,4 +1,24 @@
-package piro
+package engine
+
+// Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 import (
 	"archive/tar"
@@ -19,19 +39,21 @@ import (
 )
 
 const (
-	// PathPiroConfig is the path relative to the repo root where we expect to find the Bhojpur Piro config YAML
+	// PathPiroConfig is the path relative to the repo root where we expect to
+	// find the Bhojpur Piro config YAML
 	PathPiroConfig = ".piro/config.yaml"
 )
 
-// RepositoryProvider provides access to a repository
+// RepositoryProvider provides access to a Git repository
 type RepositoryProvider interface {
 	// Resolve resolves the repo's revision based on its ref(erence).
 	// If the revision is already set, this operation does nothing.
 	Resolve(ctx context.Context, repo *v1.Repository) error
 
-	// RemoteAnnotations extracts Bhojpur Piro annotations form information associated
-	// with a particular commit, e.g. the commit message, PRs or merge requests.
-	// Implementors can expect the revision of the repo object to be set.
+	// RemoteAnnotations extracts Bhojpur Piro annotations form information
+	// associated with a particular commit, e.g. the commit message, PRs or
+	// merge requests. Implementors can expect the revision of the repo object
+	// to be set.
 	RemoteAnnotations(ctx context.Context, repo *v1.Repository) (annotations map[string]string, err error)
 
 	// ContentProvider produces a content provider for a particular repo
@@ -46,32 +68,34 @@ var errNotSupported = xerrors.Errorf("not supported")
 // NoopRepositoryProvider provides no access to no repository
 type NoopRepositoryProvider struct{}
 
-// Resolve resolves the repo's revision based on its ref(erence).
+// Resolve resolves the Git repository's revision based on its ref(erence).
 // If the revision is already set, this operation does nothing.
 func (NoopRepositoryProvider) Resolve(ctx context.Context, repo *v1.Repository) error {
 	return errNotSupported
 }
 
-// RemoteAnnotations extracts Bhojpur Piro annotations form information associated
-// with a particular commit, e.g. the commit message, PRs or merge requests.
-// Implementors can expect the revision of the repo object to be set.
+// RemoteAnnotations extracts Bhojpur Piro annotations form information
+// associated with a particular commit, e.g. the commit message, PRs or
+// merge requests. Implementors can expect the revision of the repository
+// object to be set.
 func (NoopRepositoryProvider) RemoteAnnotations(ctx context.Context, repo *v1.Repository) (annotations map[string]string, err error) {
 	return nil, errNotSupported
 }
 
-// ContentProvider produces a content provider for a particular repo
+// ContentProvider produces a content provider for a particular Git repository
 func (NoopRepositoryProvider) ContentProvider(ctx context.Context, repo *v1.Repository) (ContentProvider, error) {
 	return nil, errNotSupported
 }
 
-// FileProvider provides direct access to repository content
+// FileProvider provides direct access to Git repository content
 func (NoopRepositoryProvider) FileProvider(ctx context.Context, repo *v1.Repository) (FileProvider, error) {
 	return nil, errNotSupported
 }
 
-// ContentProvider provides access to job Bhojpur.NET Platform application content
+// ContentProvider provides access to a Kubernetes Job on the Bhojpur.NET
+// Platform application content
 type ContentProvider interface {
-	// InitContainer builds the container that will initialize the job content.
+	// InitContainer builds the container that will initialize the Job content.
 	// The VolumeMount for /application is added by the caller.
 	// Name and ImagePullPolicy will be overwriten.
 	InitContainer() ([]corev1.Container, error)
@@ -87,8 +111,8 @@ type FileProvider interface {
 	Download(ctx context.Context, path string) (io.ReadCloser, error)
 
 	// ListFiles lists all files in a directory. If path is not a directory
-	// an error may be returned or just an empty list of paths. The paths returned
-	// are all relative to the repo root.
+	// an error may be returned or just an empty list of paths. The paths
+	// returned are all relative to the repo root.
 	ListFiles(ctx context.Context, path string) (paths []string, err error)
 }
 
@@ -101,7 +125,7 @@ type LocalContentProvider struct {
 	Clientset  kubernetes.Interface
 }
 
-// InitContainer builds the container that will initialize the job content.
+// InitContainer builds the container that will initialize the Job content.
 func (lcp *LocalContentProvider) InitContainer() ([]corev1.Container, error) {
 	return []corev1.Container{
 		{
@@ -167,7 +191,8 @@ func (lcp *LocalContentProvider) copyToPod(name string) error {
 	return nil
 }
 
-// tarWithReadyFile adds a gzipped tar entry containting an empty file named .ready to the stream
+// tarWithReadyFile adds a gzipped tar entry containting an empty file named
+// .ready to the stream
 type tarWithReadyFile struct {
 	O         io.Reader
 	remainder []byte

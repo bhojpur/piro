@@ -59,5 +59,5 @@ func init() {
 	logCmd.AddCommand(logResultCmd)
 
 	logResultCmd.Flags().StringP("description", "d", "", "result description")
-	logResultCmd.Flags().StringArrayP("channels", "c", []string{}, "result channels (e.g. github or slack)")
+	logResultCmd.Flags().StringArrayP("channels", "c", []string{}, "result channels (e.g. GitHub or Slack)")
 }

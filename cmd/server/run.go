@@ -41,9 +41,9 @@ import (
 
 	rice "github.com/GeertJohan/go.rice"
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
+	piro "github.com/bhojpur/piro/pkg/engine"
 	"github.com/bhojpur/piro/pkg/executor"
 	"github.com/bhojpur/piro/pkg/logcutter"
-	"github.com/bhojpur/piro/pkg/piro"
 	plugin "github.com/bhojpur/piro/pkg/plugin/host"
 	"github.com/bhojpur/piro/pkg/store"
 	"github.com/bhojpur/piro/pkg/store/postgres"
@@ -87,7 +87,7 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
-		log.Info("connecting to database")
+		log.Info("connecting to Bhojpur Piro database")
 		db, err := sql.Open("postgres", cfg.Storage.JobStore)
 		if err != nil {
 			return err
@@ -146,7 +146,7 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
-		log.Info("connecting to kubernetes")
+		log.Info("connecting to Kubernetes instance")
 		exec, err := executor.NewExecutor(execCfg, kubeConfig)
 		if err != nil {
 			return err
@@ -165,6 +165,7 @@ var runCmd = &cobra.Command{
 			cfg.Piro.DebugProxy = val
 		}
 
+		log.Info("starting Plugins installed locally")
 		plugins, err := plugin.Start(cfg.Plugins, theServer, service)
 		if err != nil {
 			log.WithError(err).Fatal("cannot start plugins")
@@ -190,21 +191,26 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
+		log.Info("starting Bhojpur Piro server instance")
 		err = service.Start()
 		if err != nil {
-			log.WithError(err).Fatal("cannot start service")
+			log.WithError(err).Fatal("cannot start Bhojpur Piro service")
 		}
 
 		grpcOpts := []grpc.ServerOption{
-			// We don't know how good our cients are at closing connections. If they don't close them properly
-			// we'll be leaking goroutines left and right. Closing Idle connections should prevent that.
-			// If a client gets disconnected because nothing happened for 15 minutes (e.g. no log output, no new job),
-			// the client can simply reconnect if they're still interested. WebUI is pretty good at maintaining
+			// We don't know how good our cients are at closing connections. If
+			// they don't close them properly we'll be leaking goroutines left
+			// and right. Closing the Idle connections should prevent that. If a
+			// client gets disconnected because nothing happened for 15 minutes
+			// (e.g. no log output, no new job), the client can simply reconnect
+			// if they're still interested. WebUI is pretty good at maintaining
 			// connections anyways.
 			grpc.KeepaliveParams(keepalive.ServerParameters{MaxConnectionIdle: 15 * time.Minute}),
 		}
+		log.Info("starting Bhojpur Piro gRPC server instance")
 		go startGRPC(*theServer, service, fmt.Sprintf(":%d", cfg.Service.GRPCPort), grpcOpts...)
-		go startWeb(theServer, theUIServer, *uiservice, fmt.Sprintf(":%d", cfg.Service.WebPort), startWebOpts{
+		log.Info("starting Bhojpur Piro web server instance")
+		go startWeb(theServer, theUIServer, uiservice, fmt.Sprintf(":%d", cfg.Service.WebPort), startWebOpts{
 			DebugProxy:  cfg.Piro.DebugProxy,
 			ReadOpsOnly: cfg.Service.WebReadOnly,
 			GRPCOpts:    grpcOpts,
@@ -247,7 +253,7 @@ var runCmd = &cobra.Command{
 
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-		log.Info("Bhojpur Piro is up and running. Stop with SIGINT or CTRL+C")
+		log.Info("Bhojpur Piro server is up and running. Stop with SIGINT or CTRL+C")
 		<-sigChan
 		log.Info("Received SIGINT - shutting down")
 
@@ -263,7 +269,7 @@ type startWebOpts struct {
 }
 
 // startWeb starts the Bhojpur Piro web UI service
-func startWeb(svr *v1.PiroServiceServer, uisvr *v1.PiroUIServer, uiservice piro.UIService, addr string, opts startWebOpts) {
+func startWeb(svr *v1.PiroServiceServer, uisvr *v1.PiroUIServer, uiservice *piro.UIService, addr string, opts startWebOpts) {
 	var webuiServer http.Handler
 	if opts.DebugProxy != "" {
 		tgt, err := url.Parse(opts.DebugProxy)
@@ -272,12 +278,13 @@ func startWeb(svr *v1.PiroServiceServer, uisvr *v1.PiroUIServer, uiservice piro.
 			panic(err)
 		}
 
-		log.WithField("target", tgt).Debug("proxying to webui server")
+		log.WithField("target", tgt).Debug("proxying to WebUI server")
 		webuiServer = httputil.NewSingleHostReverseProxy(tgt)
 	} else {
-		// WebUI is a single-page app, hence any path that does not resolve to a static file must result in /index.html.
-		// As a (rather crude) fix we intercept the response writer to find out if the FileServer returned an error. If so
-		// we return /index.html instead.
+		// The Bhojpur Piro WebUI is a single-page app, hence any path that
+		// does not resolve to a static file must result in /index.html. As a
+		// (rather crude) fix we intercept the response writer to find out if
+		// the FileServer returned an error. If so we return /index.html instead.
 		dws := http.FileServer(rice.MustFindBox("../../pkg/webui/build").HTTPBox())
 		webuiServer = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			dws.ServeHTTP(&interceptResponseWriter{
@@ -324,7 +331,7 @@ func startWeb(svr *v1.PiroServiceServer, uisvr *v1.PiroUIServer, uiservice piro.
 	log.WithField("addr", addr).Info("serving Bhojpur Piro web service")
 	err := http.ListenAndServe(addr, mux)
 	if err != nil {
-		log.WithField("addr", addr).WithError(err).Warn("cannot serve web service")
+		log.WithField("addr", addr).WithError(err).Warn("cannot serve Bhojpur Piro web service")
 	}
 }
 
@@ -375,7 +382,7 @@ func startPProf(addr string) {
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
-	log.WithField("addr", addr).Info("serving pprof service")
+	log.WithField("addr", addr).Info("serving Bhojpur Piro profiler service")
 	err := http.ListenAndServe(addr, mux)
 	if err != nil {
 		log.WithField("addr", addr).WithError(err).Warn("cannot serve pprof service")

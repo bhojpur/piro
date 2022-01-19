@@ -18,30 +18,32 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PiroServiceClient interface {
-	// StartLocalJob starts a job by uploading the Bhojpur.NET Platform application content directly. The incoming
-	// requests are expected in the following order:
+	// StartLocalJob starts a Kubernetes Job by uploading Bhojpur.NET Platform
+	// application content directly. The incoming requests are expected in the
+	// following order:
 	//   1. metadata
 	//   2. all bytes constituting the piro/config.yaml
 	//   3. all bytes constituting the job YAML that will be executed (that the config.yaml points to)
 	//   4. all bytes constituting the gzipped Bhojpur.NET Platform application tar stream
 	//   5. the Bhojpur.NET Platform application tar stream done marker
 	StartLocalJob(ctx context.Context, opts ...grpc.CallOption) (PiroService_StartLocalJobClient, error)
-	// StartGitHubJob starts a job on a Git context, possibly with a custom job.
+	// StartGitHubJob starts a Job on a GitHub context, possibly with a custom job.
 	StartGitHubJob(ctx context.Context, in *StartGitHubJobRequest, opts ...grpc.CallOption) (*StartJobResponse, error)
-	// StartFromPreviousJob starts a new job based on a previous one.
-	// If the previous job does not have the can-replay condition set this call will result in an error.
+	// StartFromPreviousJob starts a new Job based on a previous one.
+	// If the previous Job does not have the can-replay condition set this call
+	// will result in an error.
 	StartFromPreviousJob(ctx context.Context, in *StartFromPreviousJobRequest, opts ...grpc.CallOption) (*StartJobResponse, error)
-	// StartJobRequest starts a new job based on its specification.
+	// StartJobRequest starts a new Job based on its specification.
 	StartJob(ctx context.Context, in *StartJobRequest, opts ...grpc.CallOption) (*StartJobResponse, error)
-	// Searches for jobs known to this instance
+	// Searches for Jobs known to this instance
 	ListJobs(ctx context.Context, in *ListJobsRequest, opts ...grpc.CallOption) (*ListJobsResponse, error)
-	// Subscribe listens to new jobs/job updates
+	// Subscribe listens to new Job(s) updates
 	Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (PiroService_SubscribeClient, error)
-	// GetJob retrieves details of a single job
+	// GetJob retrieves details of a single Job
 	GetJob(ctx context.Context, in *GetJobRequest, opts ...grpc.CallOption) (*GetJobResponse, error)
-	// Listen listens to job updates and log output of a running job
+	// Listen listens to Job updates and log output of a running Job
 	Listen(ctx context.Context, in *ListenRequest, opts ...grpc.CallOption) (PiroService_ListenClient, error)
-	// StopJob stops a currently running job
+	// StopJob stops a currently running Job
 	StopJob(ctx context.Context, in *StopJobRequest, opts ...grpc.CallOption) (*StopJobResponse, error)
 }
 
@@ -209,30 +211,32 @@ func (c *piroServiceClient) StopJob(ctx context.Context, in *StopJobRequest, opt
 // All implementations must embed UnimplementedPiroServiceServer
 // for forward compatibility
 type PiroServiceServer interface {
-	// StartLocalJob starts a job by uploading the Bhojpur.NET Platform application content directly. The incoming
-	// requests are expected in the following order:
+	// StartLocalJob starts a Kubernetes Job by uploading Bhojpur.NET Platform
+	// application content directly. The incoming requests are expected in the
+	// following order:
 	//   1. metadata
 	//   2. all bytes constituting the piro/config.yaml
 	//   3. all bytes constituting the job YAML that will be executed (that the config.yaml points to)
 	//   4. all bytes constituting the gzipped Bhojpur.NET Platform application tar stream
 	//   5. the Bhojpur.NET Platform application tar stream done marker
 	StartLocalJob(PiroService_StartLocalJobServer) error
-	// StartGitHubJob starts a job on a Git context, possibly with a custom job.
+	// StartGitHubJob starts a Job on a GitHub context, possibly with a custom job.
 	StartGitHubJob(context.Context, *StartGitHubJobRequest) (*StartJobResponse, error)
-	// StartFromPreviousJob starts a new job based on a previous one.
-	// If the previous job does not have the can-replay condition set this call will result in an error.
+	// StartFromPreviousJob starts a new Job based on a previous one.
+	// If the previous Job does not have the can-replay condition set this call
+	// will result in an error.
 	StartFromPreviousJob(context.Context, *StartFromPreviousJobRequest) (*StartJobResponse, error)
-	// StartJobRequest starts a new job based on its specification.
+	// StartJobRequest starts a new Job based on its specification.
 	StartJob(context.Context, *StartJobRequest) (*StartJobResponse, error)
-	// Searches for jobs known to this instance
+	// Searches for Jobs known to this instance
 	ListJobs(context.Context, *ListJobsRequest) (*ListJobsResponse, error)
-	// Subscribe listens to new jobs/job updates
+	// Subscribe listens to new Job(s) updates
 	Subscribe(*SubscribeRequest, PiroService_SubscribeServer) error
-	// GetJob retrieves details of a single job
+	// GetJob retrieves details of a single Job
 	GetJob(context.Context, *GetJobRequest) (*GetJobResponse, error)
-	// Listen listens to job updates and log output of a running job
+	// Listen listens to Job updates and log output of a running Job
 	Listen(*ListenRequest, PiroService_ListenServer) error
-	// StopJob stops a currently running job
+	// StopJob stops a currently running Job
 	StopJob(context.Context, *StopJobRequest) (*StopJobResponse, error)
 	mustEmbedUnimplementedPiroServiceServer()
 }

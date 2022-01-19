@@ -14,7 +14,7 @@ message ListJobSpecsResponse {
     repeated DesiredAnnotation arguments = 5;
 }
 
-// DesiredAnnotation describes an annotation a job should have
+// DesiredAnnotation describes an annotation a Kubernetes Job should have
 message DesiredAnnotation {
     string name = 1;
     bool required = 2;
@@ -29,9 +29,9 @@ message IsReadOnlyResponse {
 
 // PiroUI offers services intended for the Bhojpur Piro web user interface
 service PiroUI {
-    // ListJobSpecs returns a list of jobs that can be started through the UI.
+    // ListJobSpecs returns a list of Job(s) that can be started through the Piro UI.
     rpc ListJobSpecs(ListJobSpecsRequest) returns (stream ListJobSpecsResponse) {};
 
-    // IsReadOnly returns true if the UI is readonly.
+    // IsReadOnly returns true if the Piro UI is readonly.
     rpc IsReadOnly(IsReadOnlyRequest) returns (IsReadOnlyResponse) {};
 }

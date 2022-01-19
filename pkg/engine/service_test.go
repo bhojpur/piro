@@ -1,4 +1,4 @@
-package reporef
+package engine
 
 // Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
 
@@ -20,52 +20,26 @@ package reporef
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-import (
-	"strings"
+import "testing"
 
-	v1 "github.com/bhojpur/piro/pkg/api/v1"
-	"golang.org/x/xerrors"
-)
-
-// Parse interprets a string pointing to a (GitHub) repository.
-// We expect the string to be in the form of:
-//    (host)/owner/repo(:ref|@sha)
-func Parse(spec string) (*v1.Repository, error) {
-	if strings.Contains(spec, ":") {
-		segs := strings.Split(spec, ":")
-		rep, ref := segs[0], segs[1]
-		repo, err := parseRep(rep)
-		if err != nil {
-			return nil, err
-		}
-		repo.Ref = ref
-		return repo, nil
-	}
-	if strings.Contains(spec, "@") {
-		segs := strings.Split(spec, "@")
-		rep, rev := segs[0], segs[1]
-		repo, err := parseRep(rep)
-		if err != nil {
-			return nil, err
-		}
-		repo.Revision = rev
-		return repo, nil
-	}
-	return parseRep(spec)
-}
-
-func parseRep(rep string) (*v1.Repository, error) {
-	segs := strings.Split(rep, "/")
-	if len(segs) < 2 || len(segs) > 3 {
-		return nil, xerrors.Errorf("invalid repository spec")
+func TestCleanupPodName(t *testing.T) {
+	tests := []struct {
+		Input       string
+		Expectation string
+	}{
+		{"this-is-an-invalid-podname-.33", "this-is-an-invalid-podnamea.33"},
+		{"", "unknown"},
+		// This test case happens to be shortened s.t. it ends with a dash, which is invalid.
+		// The cleanup function should not let that happen.
+		{"this-is-way-too-long-this-is-way-too-long-this-is-way-too-long", "this-is-way-too-long-this-is-way-too-long-this-is-way-tooa"},
 	}
 
-	res := &v1.Repository{}
-	if len(segs) == 3 {
-		res.Host = segs[0]
-		segs = segs[1:]
+	for _, test := range tests {
+		t.Run(test.Input, func(t *testing.T) {
+			act := cleanupPodName(test.Input)
+			if act != test.Expectation {
+				t.Errorf("unexpected result: \"%s\"; expected \"%s\"", act, test.Expectation)
+			}
+		})
 	}
-	res.Owner = segs[0]
-	res.Repo = segs[1]
-	return res, nil
 }

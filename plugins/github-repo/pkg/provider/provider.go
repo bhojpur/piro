@@ -1,5 +1,25 @@
 package provider
 
+// Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
 import (
 	"bufio"
 	"bytes"
@@ -12,7 +32,7 @@ import (
 
 	"github.com/bhojpur/piro/pkg/plugin/common"
 
-	"github.com/google/go-github/v31/github"
+	"github.com/google/go-github/v42/github"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -33,6 +53,7 @@ type GithubRepoServer struct {
 	Auth   GitCredentialHelper
 
 	Config Config
+	common.UnimplementedRepositoryPluginServer
 }
 
 // Config configures the GithubRepoServer
@@ -57,7 +78,7 @@ func (s *GithubRepoServer) Resolve(ctx context.Context, req *common.ResolveReque
 		return nil, status.Errorf(codes.InvalidArgument, "ref is empty")
 	}
 
-	branch, _, err := s.Client.Repositories.GetBranch(ctx, repo.Owner, repo.Repo, repo.Ref)
+	branch, _, err := s.Client.Repositories.GetBranch(ctx, repo.Owner, repo.Repo, repo.Ref, false)
 	if err != nil {
 		return nil, translateGitHubToGRPCError(err, repo.Revision, repo.Ref)
 	}
@@ -76,18 +97,19 @@ func (s *GithubRepoServer) Resolve(ctx context.Context, req *common.ResolveReque
 }
 
 // GetRemoteAnnotations extracts Bhojpur Piro annotations form information associated
-// with a particular commit, e.g. the commit message, PRs or merge requests.
+// with a particular commit, e.g. the commit message, Pull Requests or merge requests.
 func (s *GithubRepoServer) GetRemoteAnnotations(ctx context.Context, req *common.GetRemoteAnnotationsRequest) (resp *common.GetRemoteAnnotationsResponse, err error) {
 	repo := req.Repository
 
-	commit, _, err := s.Client.Repositories.GetCommit(ctx, repo.Owner, repo.Repo, repo.Revision)
+	opts := &github.ListOptions{Page: 2, PerPage: 2}
+	commit, _, err := s.Client.Repositories.GetCommit(ctx, repo.Owner, repo.Repo, repo.Revision, opts)
 	if err != nil {
 		return nil, translateGitHubToGRPCError(err, repo.Revision, repo.Ref)
 	}
 
 	res := make(map[string]string)
 	if commit.Commit != nil {
-		atns := parseAnnotations(commit.Commit.GetMessage())
+		atns := ParseAnnotations(commit.Commit.GetMessage())
 		for k, v := range atns {
 			res[k] = v
 		}
@@ -107,7 +129,7 @@ func (s *GithubRepoServer) GetRemoteAnnotations(ctx context.Context, req *common
 			log.WithField("ref", repo.Ref).WithField("rev", repo.Revision).WithField("pr", pr.GetHTMLURL()).Warn("found multiple open PR's - using oldest one")
 		}
 
-		atns := parseAnnotations(pr.GetBody())
+		atns := ParseAnnotations(pr.GetBody())
 		for k, v := range atns {
 			res[k] = v
 		}
@@ -117,9 +139,9 @@ func (s *GithubRepoServer) GetRemoteAnnotations(ctx context.Context, req *common
 	}, nil
 }
 
-// pareseAnnotations parses one annotation per line in the form of "/piro <key>(=<value>)?".
+// PareseAnnotations parses one annotation per line in the form of "/piro <key>(=<value>)?".
 // Any line not matching this format is silently ignored.
-func parseAnnotations(message string) (res map[string]string) {
+func ParseAnnotations(message string) (res map[string]string) {
 	scanner := bufio.NewScanner(bytes.NewReader([]byte(message)))
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -208,7 +230,7 @@ func (s *GithubRepoServer) ContentInitContainer(ctx context.Context, req *common
 
 // Download downloads a file from the repository.
 func (s *GithubRepoServer) Download(ctx context.Context, req *common.DownloadRequest) (*common.DownloadResponse, error) {
-	dl, err := s.Client.Repositories.DownloadContents(ctx, req.Repository.Owner, req.Repository.Repo, req.Path, &github.RepositoryContentGetOptions{
+	dl, resp, err := s.Client.Repositories.DownloadContents(ctx, req.Repository.Owner, req.Repository.Repo, req.Path, &github.RepositoryContentGetOptions{
 		Ref: req.Repository.Revision,
 	})
 	if err != nil {
@@ -219,6 +241,9 @@ func (s *GithubRepoServer) Download(ctx context.Context, req *common.DownloadReq
 	res, err := ioutil.ReadAll(dl)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "cannot download file: %q", err)
+	}
+	if resp == nil {
+		return nil, status.Errorf(codes.Internal, "cannot download nil resp file: %q", nil)
 	}
 	return &common.DownloadResponse{
 		Content: res,

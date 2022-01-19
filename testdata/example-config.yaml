@@ -12,7 +12,7 @@ executor:
   totalTimeout: 60m
 storage:
   logsPath: "/tmp/logs"
-  jobsConnectionString: dbname=piro user=postgres connect_timeout=5 sslmode=disable
+  jobsConnectionString: dbname=piro user=bhojpur connect_timeout=5 sslmode=disable
 github:
   webhookSecret: foobar
   privateKeyPath: testdata/example-app.pem

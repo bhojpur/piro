@@ -55,7 +55,7 @@ Operators can be negated by prefixing them with !.
 For example:
   phase==running             finds all running jobs
   owner!==webui              finds all jobs NOT owned by webui
-  repo.repo|=piro            finds all jobs on repositories whose names begin with Bhojpur Piro
+  repo.repo|=piro            finds all jobs on repositories whose names begin with Piro
   phase==done success==true  finds all successfully finished jobs
 		`,
 	RunE: func(cmd *cobra.Command, args []string) error {

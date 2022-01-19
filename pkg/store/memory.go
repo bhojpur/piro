@@ -1,5 +1,25 @@
 package store
 
+// Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
 import (
 	"bytes"
 	"context"
@@ -143,7 +163,7 @@ func (s *inMemoryLogStore) Read(id string) (io.ReadCloser, error) {
 	}), nil
 }
 
-// NewInMemoryJobStore creates a new in-memory job store
+// NewInMemoryJobStore creates a new in-memory Job store
 func NewInMemoryJobStore() Jobs {
 	return &inMemoryJobStore{
 		jobs:  make(map[string]v1.JobStatus),
@@ -157,7 +177,7 @@ type inMemoryJobStore struct {
 	mu    sync.RWMutex
 }
 
-// Store stores job information in the store.
+// Store stores Job information in the store.
 // Storing a job whose name we already have in store will override the previously
 // stored job.
 func (s *inMemoryJobStore) Store(ctx context.Context, job v1.JobStatus) error {
@@ -169,7 +189,7 @@ func (s *inMemoryJobStore) Store(ctx context.Context, job v1.JobStatus) error {
 }
 
 // Retrieves a particular job bassd on its name.
-// If the job is unknown we'll return ErrNotFound.
+// If the Job is unknown we'll return ErrNotFound.
 func (s *inMemoryJobStore) Get(ctx context.Context, name string) (*v1.JobStatus, error) {
 	s.mu.RLock()
 	job, ok := s.jobs[name]
@@ -182,7 +202,7 @@ func (s *inMemoryJobStore) Get(ctx context.Context, name string) (*v1.JobStatus,
 	return &job, nil
 }
 
-// Searches for jobs based on their annotations
+// Searches for Job(s) based on their annotations
 func (s *inMemoryJobStore) Find(ctx context.Context, filter []*v1.FilterExpression, order []*v1.OrderExpression, start, limit int) (slice []v1.JobStatus, total int, err error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

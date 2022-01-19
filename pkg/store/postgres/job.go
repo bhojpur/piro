@@ -1,5 +1,25 @@
 package postgres
 
+// Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
 import (
 	"context"
 	"database/sql"
@@ -9,13 +29,13 @@ import (
 
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
 	"github.com/bhojpur/piro/pkg/store"
-	"google.golang.org/protobuf/encoding/protojson"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
-// JobStore stores jobs in a Postgres database
+// JobStore stores jobs in a PostgreSQL database
 type JobStore struct {
 	DB *sql.DB
 
@@ -29,7 +49,7 @@ func NewJobStore(db *sql.DB) (*JobStore, error) {
 	res := &JobStore{DB: db}
 	res.metrics.PostgresStoreJobDurationSecond = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "job_store_store_duration_second",
-		Help:    "Time it takes to store a job status",
+		Help:    "Time it takes to store a Job status",
 		Buckets: prometheus.ExponentialBuckets(0.001, 10, 4),
 	})
 	return res, nil
@@ -41,25 +61,25 @@ func (s *JobStore) RegisterPrometheusMetrics(reg prometheus.Registerer) {
 		s.metrics.PostgresStoreJobDurationSecond,
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 			Name: "job_store_db_open_connections_total",
-			Help: "Open database connections of the job store.",
+			Help: "Open database connections of the Job store.",
 		}, func() float64 { return float64(s.DB.Stats().OpenConnections) }),
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 			Name: "job_store_db_inuse_connections_total",
-			Help: "Open database connections of the job store which are in use.",
+			Help: "Open database connections of the Job store which are in use.",
 		}, func() float64 { return float64(s.DB.Stats().InUse) }),
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 			Name: "job_store_db_idle_connections_total",
-			Help: "Open database connections of the job store which are idleing.",
+			Help: "Open database connections of the Job store which are idleing.",
 		}, func() float64 { return float64(s.DB.Stats().Idle) }),
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 			Name: "job_store_db_waiting_queries_total",
-			Help: "Number of waiting new DB connections of the job store.",
+			Help: "Number of waiting new DB connections of the Job store.",
 		}, func() float64 { return float64(s.DB.Stats().WaitCount) }),
 	)
 }
 
-// Store stores job information in the store.
-func (s *JobStore) Store(ctx context.Context, job v1.JobStatus) error {
+// Store stores Kubernetes Job information in the store.
+func (s *JobStore) Store(ctx context.Context, job *v1.JobStatus) error {
 	defer func(start time.Time) {
 		s.metrics.PostgresStoreJobDurationSecond.Observe(time.Since(start).Seconds())
 	}(time.Now())
@@ -67,7 +87,7 @@ func (s *JobStore) Store(ctx context.Context, job v1.JobStatus) error {
 	marshaler := &protojson.MarshalOptions{
 		UseEnumNumbers: true,
 	}
-	serializedJob, err := marshaler.Marshal(&job)
+	serializedJob, err := marshaler.Marshal(job)
 	if err != nil {
 		return err
 	}
@@ -279,7 +299,7 @@ func (s *JobStore) Find(ctx context.Context, filter []*v1.FilterExpression, orde
 	return result, total, nil
 }
 
-// StoreJobSpec stores job information in the store.
+// StoreJobSpec stores Job information in the store.
 func (s *JobStore) StoreJobSpec(name string, data []byte) error {
 	rows, err := s.DB.Query(`
 		INSERT
@@ -299,7 +319,7 @@ func (s *JobStore) StoreJobSpec(name string, data []byte) error {
 	return nil
 }
 
-// GetJobSpec retrieves a particular job bassd on its name.
+// GetJobSpec retrieves a particular Job bassd on its name.
 func (s *JobStore) GetJobSpec(name string) ([]byte, error) {
 	var data []byte
 	err := s.DB.QueryRow("SELECT data FROM job_spec WHERE name = $1", name).Scan(&data)

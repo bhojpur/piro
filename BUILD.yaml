@@ -21,7 +21,7 @@ packages:
         - -tags
         - server
         - -ldflags
-        - -X 'github.com/bhojpu/piro/pkg/version.Version=${version}' -X 'github.com/bhojpur/piro/pkg/version.Commit=${commit}' -X 'github.com/bhojpur/piro/pkg/version.Date=${date}'
+        - -X 'github.com/bhojpur/piro/pkg/version.Version=${version}' -X 'github.com/bhojpur/piro/pkg/version.Commit=${commit}' -X 'github.com/bhojpur/piro/pkg/version.Date=${date}'
   - name: plugin-client-lib
     type: go
     config:

@@ -1,5 +1,25 @@
 package main
 
+// Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
 import (
 	"context"
 	"fmt"
@@ -8,9 +28,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/bradleyfalzon/ghinstallation"
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
 	plugin "github.com/bhojpur/piro/pkg/plugin/client"
+	"github.com/bradleyfalzon/ghinstallation"
 	"github.com/google/go-github/v35/github"
 	log "github.com/sirupsen/logrus"
 )
@@ -64,7 +84,7 @@ func main() {
 
 type githubTriggerPlugin struct {
 	Config *Config
-	Piro  v1.PiroServiceClient
+	Piro   v1.PiroServiceClient
 	Github *github.Client
 }
 
@@ -374,7 +394,7 @@ func (p *githubTriggerPlugin) processIssueCommentEvent(ctx context.Context, even
 	if err != nil {
 		log.WithError(err).Warn("GitHub webhook error")
 		feedback.Success = false
-		feedback.Message = "cannot find corresponding PR"
+		feedback.Message = "cannot find corresponding Pull Request"
 		return
 	}
 
@@ -503,10 +523,10 @@ func (p *githubTriggerPlugin) handleCommandRun(ctx context.Context, event *githu
 	})
 	if err != nil {
 		log.WithError(err).Warn("GitHub webhook error")
-		return "", fmt.Errorf("cannot start job - please talk to whoever's in-charge of your Bhojpur Piro installation")
+		return "", fmt.Errorf("cannot start Job - please talk to whoever's in-charge of your Bhojpur Piro installation")
 	}
 
-	return fmt.Sprintf("started the job as [%s](%s/job/%s)", resp.Status.Name, p.Config.BaseURL, resp.Status.Name), nil
+	return fmt.Sprintf("started the Job as [%s](%s/job/%s)", resp.Status.Name, p.Config.BaseURL, resp.Status.Name), nil
 }
 
 func parseCommand(l string) (cmd string, args []string, err error) {

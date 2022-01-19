@@ -1,5 +1,25 @@
 package executor
 
+// Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
 import (
 	"context"
 	"encoding/json"
@@ -12,11 +32,11 @@ import (
 	"time"
 
 	pirov1 "github.com/bhojpur/piro/pkg/api/v1"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	log "github.com/sirupsen/logrus"
 	"github.com/technosophos/moniker"
 	"golang.org/x/xerrors"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -63,7 +83,7 @@ func NewExecutor(config Config, kubeConfig *rest.Config) (*Executor, error) {
 	}
 
 	if config.JobPrepTimeout == nil {
-		return nil, xerrors.Errorf("job preperation timeout is required")
+		return nil, xerrors.Errorf("job preparation timeout is required")
 	}
 	if config.JobTotalTimeout == nil {
 		return nil, xerrors.Errorf("total job timeout is required")
@@ -86,7 +106,7 @@ func NewExecutor(config Config, kubeConfig *rest.Config) (*Executor, error) {
 
 // Executor starts and watches jobs running in Kubernetes
 type Executor struct {
-	// OnUpdate is called when the status of a job changes.
+	// OnUpdate is called when the status of a Kubernetes Job changes.
 	// Beware: this function can be called several times with the same status.
 	OnUpdate func(pod *corev1.Pod, status *pirov1.JobStatus)
 
@@ -99,7 +119,7 @@ type Executor struct {
 	mu          sync.RWMutex
 }
 
-// waitingJob is a job which doesn't run yet, but waits until it can start (e.g. based on time)
+// waitingJob is a Job which doesn't run yet, but waits until it can start (e.g. based on time)
 type waitingJob struct {
 	Cancel func(reason string)
 	Start  func()
@@ -124,10 +144,10 @@ type startOptions struct {
 	Sidecars     []string
 }
 
-// StartOpt configures a job at startup
+// StartOpt configures a Kubernetes Job at startup
 type StartOpt func(*startOptions)
 
-// WithBackoff configures the backoff behaviour of a job
+// WithBackoff configures the backoff behaviour of a Kubernetes Job
 func WithBackoff(limit int) StartOpt {
 	return func(opts *startOptions) {
 		opts.Modifier = append(opts.Modifier, func(j *corev1.Pod) {
@@ -136,7 +156,7 @@ func WithBackoff(limit int) StartOpt {
 	}
 }
 
-// WithAnnotation sets a single annotation on a job
+// WithAnnotation sets a single annotation on a Kubernetes Job
 func WithAnnotation(key, value string) StartOpt {
 	return func(opts *startOptions) {
 		if opts.Annotations == nil {
@@ -146,35 +166,35 @@ func WithAnnotation(key, value string) StartOpt {
 	}
 }
 
-// WithAnnotations sets all annotations of a job
+// WithAnnotations sets all annotations of a Kubernetes Job
 func WithAnnotations(annotations map[string]string) StartOpt {
 	return func(opts *startOptions) {
 		opts.Annotations = annotations
 	}
 }
 
-// WithName sets the name of the job
+// WithName sets the name of the Kubernetes Job
 func WithName(name string) StartOpt {
 	return func(opts *startOptions) {
 		opts.JobName = name
 	}
 }
 
-// WithMutex starts a job with a mutex (i.e. cancels all other jobs with that mutex)
+// WithMutex starts a Kubernetes Job with a mutex (i.e. cancels all other Jobs with that mutex)
 func WithMutex(name string) StartOpt {
 	return func(opts *startOptions) {
 		opts.Mutex = name
 	}
 }
 
-// WithCanReplay configures the if the job can be replayed
+// WithCanReplay configures the if the Kubernetes Job can be replayed
 func WithCanReplay(canReplay bool) StartOpt {
 	return func(opts *startOptions) {
 		opts.CanReplay = canReplay
 	}
 }
 
-// WithWaitUntil starts the execution of a job at some later point
+// WithWaitUntil starts the execution of a Kubernetes Job at some later point
 func WithWaitUntil(t time.Time) StartOpt {
 	return func(opts *startOptions) {
 		opts.WaitUntil = t
@@ -188,7 +208,7 @@ func WithSidecars(names []string) StartOpt {
 	}
 }
 
-// Start starts a new job
+// Start starts a new Kubernetes Job
 func (js *Executor) Start(podspec corev1.PodSpec, metadata pirov1.JobMetadata, options ...StartOpt) (status *pirov1.JobStatus, err error) {
 	opts := startOptions{
 		JobName: fmt.Sprintf("piro-%s", strings.ReplaceAll(moniker.New().Name(), " ", "-")),
@@ -231,7 +251,7 @@ func (js *Executor) Start(podspec corev1.PodSpec, metadata pirov1.JobMetadata, o
 		Name: opts.JobName,
 		Labels: map[string]string{
 			js.labels.LabelPiroMarker: "true",
-			js.labels.LabelJobName:     opts.JobName,
+			js.labels.LabelJobName:    opts.JobName,
 		},
 		Annotations: annotations,
 	}
@@ -243,12 +263,12 @@ func (js *Executor) Start(podspec corev1.PodSpec, metadata pirov1.JobMetadata, o
 		opt(&poddesc)
 	}
 
-	mutexCancelationMsg := fmt.Sprintf("a newer job (%s) with the same mutex (%s) started", opts.JobName, opts.Mutex)
+	mutexCancelationMsg := fmt.Sprintf("a newer Job (%s) with the same mutex (%s) started", opts.JobName, opts.Mutex)
 	if opts.Mutex != "" {
 		labelMutex := js.labels.LabelMutex
 		poddesc.ObjectMeta.Labels[labelMutex] = opts.Mutex
 
-		// enforce mutex by marking all other jobs with the same mutex as failed
+		// enforce mutex by marking all other Kubernetes Jobs with the same mutex as failed
 		pods, err := js.Client.CoreV1().Pods(js.Config.Namespace).List(context.Background(), metav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", labelMutex, opts.Mutex)})
 		if err != nil {
 			return nil, xerrors.Errorf("cannot enforce mutex: %w", err)
@@ -258,7 +278,7 @@ func (js *Executor) Start(podspec corev1.PodSpec, metadata pirov1.JobMetadata, o
 				js.labels.AnnotationFailed: mutexCancelationMsg,
 			})
 			if err, ok := err.(*k8serr.StatusError); ok && err.ErrStatus.Code == http.StatusNotFound {
-				// if the pod is gone by now that's ok. The mutex was enfored alright.
+				// if the Kubernetes pod is gone by now that's ok. The mutex was enfored alright.
 				continue
 			}
 			if err != nil {
@@ -266,7 +286,7 @@ func (js *Executor) Start(podspec corev1.PodSpec, metadata pirov1.JobMetadata, o
 			}
 		}
 
-		// enforce mutex on all waiting jobs
+		// enforce mutex on all waiting Kubernetes Jobs
 		js.mu.Lock()
 		for k, wj := range js.waitingJobs {
 			if wj.Mutex == opts.Mutex {
@@ -280,7 +300,7 @@ func (js *Executor) Start(podspec corev1.PodSpec, metadata pirov1.JobMetadata, o
 	startJob := func() (*pirov1.JobStatus, error) {
 		if log.GetLevel() == log.DebugLevel {
 			dbg, _ := json.MarshalIndent(poddesc, "", "  ")
-			log.Debugf("scheduling job\n%s", dbg)
+			log.Debugf("scheduling Job\n%s", dbg)
 		}
 
 		job, err := js.Client.CoreV1().Pods(js.Config.Namespace).Create(context.Background(), &poddesc, metav1.CreateOptions{})
@@ -291,9 +311,10 @@ func (js *Executor) Start(podspec corev1.PodSpec, metadata pirov1.JobMetadata, o
 		return getStatus(job, js.labels)
 	}
 
-	// Register the go routine to start the job when its time comes.
-	// Bhojpur Piro will tell us again about this job upon startup (pass set of waiting jobs into NewExecutor).
-	// When a waiting job is canceled manually or by a mutex it's deleted from the store.
+	// Register the Go routine to start the Kubernetes Job when its time comes.
+	// Bhojpur Piro will tell us again about this Job upon startup (pass set of
+	// waiting Job(s) into NewExecutor). When a waiting Job is canceled manually
+	// or by a mutex it's deleted from the store.
 	log.WithField("wait-until", opts.WaitUntil).Debug("waiting until")
 	if !opts.WaitUntil.IsZero() && opts.WaitUntil.After(time.Now()) {
 		status, err := getStatus(&poddesc, js.labels)
@@ -301,7 +322,8 @@ func (js *Executor) Start(podspec corev1.PodSpec, metadata pirov1.JobMetadata, o
 			return nil, err
 		}
 
-		// This job's time hasn't come yet - let's delay its execution until later.
+		// This Kubernetes Job's time hasn't come yet - let's delay its execution
+		// until later.
 		startChan, cancelChan := make(chan struct{}), make(chan string)
 		js.mu.Lock()
 		js.waitingJobs[opts.JobName] = &waitingJob{
@@ -338,9 +360,10 @@ func (js *Executor) Start(podspec corev1.PodSpec, metadata pirov1.JobMetadata, o
 
 		status.Phase = pirov1.JobPhase_PHASE_WAITING
 
-		// normally we'd see a Kubernetes event as the job would start immediately. This Kubernetes event would propagate
-		// throughout the system. However, waiting jobs do not produce Kubernetes events right away, hence we have to
-		// call OnUpdate ourselves.
+		// normally we'd see a Kubernetes event as the Job would start
+		// immediately. This Kubernetes event would propagate throughout the
+		// system. However, waiting Job(s) do not produce Kubernetes events
+		// right away, hence we have to call OnUpdate ourselves.
 		js.OnUpdate(&poddesc, status)
 
 		return status, nil
@@ -356,7 +379,7 @@ func (js *Executor) monitorJobs() {
 			LabelSelector: fmt.Sprintf("%s=true", js.labels.LabelPiroMarker),
 		})
 		if err != nil {
-			log.WithError(err).Error("cannot watch jobs - retrying")
+			log.WithError(err).Error("cannot watch Jobs - retrying")
 			time.Sleep(reconnectionTimeout)
 			continue
 		}
@@ -407,7 +430,7 @@ func (js *Executor) actOnUpdate(status *pirov1.JobStatus, obj *corev1.Pod) error
 			PropagationPolicy:  &policy,
 		})
 		if err != nil {
-			log.WithError(err).WithField("name", obj.Name).Error("cannot delete job pod")
+			log.WithError(err).WithField("name", obj.Name).Error("cannot delete Job pod")
 		}
 
 		// TODO: clean up Bhojpur.NET Platform application content
@@ -419,7 +442,8 @@ func (js *Executor) actOnUpdate(status *pirov1.JobStatus, obj *corev1.Pod) error
 }
 
 func (js *Executor) writeEventTraceLog(status *pirov1.JobStatus, obj *corev1.Pod) {
-	// make sure we recover from a panic in this function - not that we expect this to ever happen
+	// make sure we recover from a panic in this function - not that we expect
+	// this to ever happen
 	//nolint:errcheck
 	defer recover()
 
@@ -441,17 +465,19 @@ func (js *Executor) writeEventTraceLog(status *pirov1.JobStatus, obj *corev1.Pod
 	}
 
 	type eventTraceEntry struct {
-		Time   string             `yaml:"time"`
-		Status *pirov1.JobStatus  `yaml:"status"`
-		Job    *corev1.Pod        `yaml:"job"`
+		Time   string            `yaml:"time"`
+		Status *pirov1.JobStatus `yaml:"status"`
+		Job    *corev1.Pod       `yaml:"job"`
 	}
-	// If writing the event trace log fails that does nothing to harm the function of ws-manager.
-	// In fact we don't even want to react to it, hence the nolint.
+	// If writing the event trace log fails that does nothing to harm the
+	// function of ws-manager. In fact, we don't even want to react to it,
+	// hence the nolint.
 	//nolint:errcheck
 	json.NewEncoder(out).Encode(eventTraceEntry{Time: time.Now().Format(time.RFC3339), Status: status, Job: obj})
 }
 
-// Logs provides the log output of a running job. If the job is unknown, nil is returned.
+// Logs provides the log output of a running Job. If the job is unknown, nil is
+// returned.
 func (js *Executor) Logs(name string) io.Reader {
 	return listenToLogs(js.Client, name, js.Config.Namespace, js.labels)
 }
@@ -525,9 +551,9 @@ func (js *Executor) getJobPod(name string) (*corev1.Pod, error) {
 	return &pods.Items[0], nil
 }
 
-// Stop stops a job
+// Stop stops a Kubernetes Job
 func (js *Executor) Stop(name, reason string) error {
-	// maybe this is a waiting job - if so, kill that one first
+	// maybe this is a waiting Job - if so, kill that one first
 	js.mu.Lock()
 	if wj, ok := js.waitingJobs[name]; ok {
 		wj.Cancel(reason)
@@ -553,7 +579,7 @@ func (js *Executor) Stop(name, reason string) error {
 	return nil
 }
 
-// GetKnownJobs returns a list of all jobs the executor knows about
+// GetKnownJobs returns a list of all Kubernetes Job(s) the executor knows about
 func (js *Executor) GetKnownJobs() (jobs []pirov1.JobStatus, err error) {
 	js.mu.RLock()
 	for _, wj := range js.waitingJobs {
@@ -579,7 +605,7 @@ func (js *Executor) GetKnownJobs() (jobs []pirov1.JobStatus, err error) {
 	return
 }
 
-// RegisterResult registers a result produced by a job
+// RegisterResult registers a result produced by a Kubernetes Job
 func (js *Executor) RegisterResult(jobname string, res *pirov1.JobResult) error {
 	pod, err := js.getJobPod(jobname)
 	if err != nil {
@@ -591,7 +617,7 @@ func (js *Executor) RegisterResult(jobname string, res *pirov1.JobResult) error 
 	err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		pod, err := client.Get(context.Background(), podname, metav1.GetOptions{})
 		if err != nil {
-			return xerrors.Errorf("cannot find job pod %s: %w", podname, err)
+			return xerrors.Errorf("cannot find Job pod %s: %w", podname, err)
 		}
 		if pod == nil {
 			return xerrors.Errorf("job pod %s does not exist", podname)
@@ -617,13 +643,13 @@ func (js *Executor) RegisterResult(jobname string, res *pirov1.JobResult) error 
 	return err
 }
 
-// addAnnotation adds annotations to a pod
+// addAnnotation adds annotations to a Kubernetes pod
 func (js *Executor) addAnnotation(podname string, annotations map[string]string) error {
 	client := js.Client.CoreV1().Pods(js.Config.Namespace)
 	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		pod, err := client.Get(context.Background(), podname, metav1.GetOptions{})
 		if err != nil {
-			return xerrors.Errorf("cannot find job pod %s: %w", podname, err)
+			return xerrors.Errorf("cannot find Job pod %s: %w", podname, err)
 		}
 		if pod == nil {
 			return xerrors.Errorf("job pod %s does not exist", podname)

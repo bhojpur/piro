@@ -1,4 +1,24 @@
-package piro
+package engine
+
+// Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 import (
 	"bytes"
@@ -27,7 +47,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// StartLocalJob starts a job whoose content is uploaded
+// StartLocalJob starts a Kubernetes Job whoose content is uploaded
 func (srv *Service) StartLocalJob(inc v1.PiroService_StartLocalJobServer) error {
 	req, err := inc.Recv()
 	if err != nil {
@@ -74,7 +94,7 @@ func (srv *Service) StartLocalJob(inc v1.PiroService_StartLocalJobServer) error 
 				phase = phaseJobYaml
 			}
 			if phase != phaseJobYaml {
-				return status.Error(codes.InvalidArgument, "expected job yaml")
+				return status.Error(codes.InvalidArgument, "expected Job yaml")
 			}
 
 			jobYAML = append(jobYAML, req.GetJobYaml()...)
@@ -85,7 +105,7 @@ func (srv *Service) StartLocalJob(inc v1.PiroService_StartLocalJobServer) error 
 				phase = phaseApplicationTar
 			}
 			if phase != phaseApplicationTar {
-				return status.Error(codes.InvalidArgument, "expected Bhojpur.NET Platform application tar")
+				return status.Error(codes.InvalidArgument, "expected application tar")
 			}
 
 			data := req.GetApplicationTar()
@@ -99,7 +119,7 @@ func (srv *Service) StartLocalJob(inc v1.PiroService_StartLocalJobServer) error 
 		}
 		if req.GetApplicationTarDone() {
 			if phase != phaseApplicationTar {
-				return status.Error(codes.InvalidArgument, "expected prior Bhojpur.NET Platform application tar")
+				return status.Error(codes.InvalidArgument, "expected prior application tar")
 			}
 
 			break
@@ -109,7 +129,7 @@ func (srv *Service) StartLocalJob(inc v1.PiroService_StartLocalJobServer) error 
 	_, err = dfs.Seek(0, 0)
 
 	if len(configYAML) == 0 && len(jobYAML) == 0 {
-		return status.Error(codes.InvalidArgument, "either config or job YAML must not be empty")
+		return status.Error(codes.InvalidArgument, "either config or Job YAML must not be empty")
 	}
 
 	cp := &LocalContentProvider{
@@ -119,25 +139,25 @@ func (srv *Service) StartLocalJob(inc v1.PiroService_StartLocalJobServer) error 
 		Clientset:  srv.Executor.Client,
 	}
 
-	// Note: for local jobs we DO NOT store the job yaml as we cannot replay those jobs anyways.
-	//       The context upload is a one time thing and hence prevent job replay.
-
+	// Note: for local jobs we DO NOT store the Job yaml as we cannot replay
+	// those jobs anyways. The context upload is a one time thing and hence
+	// prevent job replay.
 	flatOwner := strings.ReplaceAll(strings.ToLower(md.Owner), " ", "")
 	name := cleanupPodName(fmt.Sprintf("local-%s-%s", flatOwner, moniker.New().NameSep("-")))
 
-	jobStatus, err := srv.RunJob(inc.Context(), name, md, cp, jobYAML, false, time.Time{})
+	jobStatus, err := srv.RunJob(inc.Context(), name, &md, cp, jobYAML, false, time.Time{})
 
 	if err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
 
-	log.WithField("status", jobStatus).Info(("started new local job"))
+	log.WithField("status", jobStatus).Info(("started new local Job"))
 	return inc.SendAndClose(&v1.StartJobResponse{
 		Status: jobStatus,
 	})
 }
 
-// StartGitHubJob starts a job on a Git context, possibly with a custom job.
+// StartGitHubJob starts a Job on a Git context, possibly with a custom Job.
 func (srv *Service) StartGitHubJob(ctx context.Context, req *v1.StartGitHubJobRequest) (resp *v1.StartJobResponse, err error) {
 	if req.GithubToken != "" {
 		return nil, status.Errorf(codes.InvalidArgument, "Per-job GitHub tokens are no longer supported")
@@ -157,7 +177,7 @@ func (srv *Service) StartGitHubJob(ctx context.Context, req *v1.StartGitHubJobRe
 	})
 }
 
-// StartJob starts a new job based on its specification.
+// StartJob starts a new Kubernetes Job based on its specification.
 func (srv *Service) StartJob(ctx context.Context, req *v1.StartJobRequest) (resp *v1.StartJobResponse, err error) {
 	reqjson, err := (&protojson.MarshalOptions{UseEnumNumbers: true}).Marshal(req)
 	if err == nil {
@@ -277,16 +297,16 @@ func (srv *Service) StartJob(ctx context.Context, req *v1.StartJobRequest) (resp
 		}
 
 		if !canReplay {
-			return nil, status.Error(codes.InvalidArgument, "cannot delay the execution of non-replayable jobs (i.e. jobs with custom GitHub token or sideload)")
+			return nil, status.Error(codes.InvalidArgument, "cannot delay the execution of non-replayable Jobs (i.e. jobs with custom GitHub token or sideload)")
 		}
 	}
 
-	jobStatus, err := srv.RunJob(ctx, name, *md, cp, jobYAML, canReplay, waitUntil)
+	jobStatus, err := srv.RunJob(ctx, name, md, cp, jobYAML, canReplay, waitUntil)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	log.WithField("status", jobStatus).Info(("started new GitHub job"))
+	log.WithField("status", jobStatus).Info(("started new GitHub Job"))
 	return &v1.StartJobResponse{
 		Status: jobStatus,
 	}, nil
@@ -316,8 +336,9 @@ func cleanupPodName(name string) string {
 	if len(name) > 58 {
 		// Kubernetes label values must not be longer than 63 characters according to
 		// https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
-		// We need to leave some space for the build number. Assuming that we won't have more than 9999 builds on
-		// a single long named branch, leaving four chars should be enough.
+		// We need to leave some space for the build number. Assuming that we
+		// won't have more than 9999 builds on a single long named branch,
+		// leaving four chars should be enough.
 		name = name[:58]
 	}
 
@@ -340,7 +361,7 @@ func cleanupPodName(name string) string {
 	return name
 }
 
-// StartFromPreviousJob starts a new job based on an old one
+// StartFromPreviousJob starts a new Kubernetes Job based on an old one
 func (srv *Service) StartFromPreviousJob(ctx context.Context, req *v1.StartFromPreviousJobRequest) (*v1.StartJobResponse, error) {
 	oldJobStatus, err := srv.Jobs.Get(ctx, req.PreviousJob)
 	if err == store.ErrNotFound {
@@ -386,18 +407,19 @@ func (srv *Service) StartFromPreviousJob(ctx context.Context, req *v1.StartFromP
 		}
 	}
 
-	jobStatus, err := srv.RunJob(ctx, name, *oldJobStatus.Metadata, cp, jobYAML, canReplay, waitUntil)
+	jobStatus, err := srv.RunJob(ctx, name, oldJobStatus.Metadata, cp, jobYAML, canReplay, waitUntil)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	log.WithField("name", req.PreviousJob).WithField("old-name", name).Info(("started new job from an old one"))
+	log.WithField("name", req.PreviousJob).WithField("old-name", name).Info(("started new Job from an old one"))
 	return &v1.StartJobResponse{
 		Status: jobStatus,
 	}, nil
 }
 
-// newTarStreamAdapter creates a reader from an incoming Bhojpur.NET Platform application tar stream
+// newTarStreamAdapter creates a reader from an incoming Bhojpur.NET Platform
+// application tar stream
 func newTarStreamAdapter(inc v1.PiroService_StartLocalJobServer, initial []byte) io.Reader {
 	return &tarStreamAdapter{
 		inc:       inc,
@@ -436,7 +458,7 @@ func (tsa *tarStreamAdapter) Read(p []byte) (n int, err error) {
 	return n, nil
 }
 
-// ListJobs lists jobs
+// ListJobs lists Kubernetes Job(s)
 func (srv *Service) ListJobs(ctx context.Context, req *v1.ListJobsRequest) (resp *v1.ListJobsResponse, err error) {
 	result, total, err := srv.Jobs.Find(ctx, req.Filter, req.Order, int(req.Start), int(req.Limit))
 	if err != nil {
@@ -454,7 +476,7 @@ func (srv *Service) ListJobs(ctx context.Context, req *v1.ListJobsRequest) (resp
 	}, nil
 }
 
-// Subscribe listens to job updates
+// Subscribe listens to Kubernetes Job updates
 func (srv *Service) Subscribe(req *v1.SubscribeRequest, resp v1.PiroService_SubscribeServer) (err error) {
 	evts := srv.events.On("job")
 	for evt := range evts {
@@ -470,7 +492,7 @@ func (srv *Service) Subscribe(req *v1.SubscribeRequest, resp v1.PiroService_Subs
 	return nil
 }
 
-// GetJob returns the information about a particular job
+// GetJob returns the information about a particular Kubernetes Job
 func (srv *Service) GetJob(ctx context.Context, req *v1.GetJobRequest) (resp *v1.GetJobResponse, err error) {
 	job, err := srv.Jobs.Get(ctx, req.Name)
 	if err != nil {
@@ -559,8 +581,10 @@ func (srv *Service) Listen(req *v1.ListenRequest, ls v1.PiroService_ListenServer
 			defer wg.Done()
 
 			if job.Phase == v1.JobPhase_PHASE_DONE {
-				// The job we're listening on is already done. To provide the same behaviour as if the job were still running,
-				// we first have to dump out all the logs and then send the one final status update.
+				// The Kubernetes Job we're listening on is already done. To
+				// provide the same behaviour as if the Job were still running,
+				// we first have to dump out all the logs and then send the one
+				// final status update.
 				logwg.Wait()
 
 				ls.Send(&v1.ListenResponse{
@@ -602,7 +626,7 @@ func (srv *Service) Listen(req *v1.ListenRequest, ls v1.PiroService_ListenServer
 	return err
 }
 
-// StopJob stops a running job
+// StopJob stops a running Kubernetes Job
 func (srv *Service) StopJob(ctx context.Context, req *v1.StopJobRequest) (*v1.StopJobResponse, error) {
 	job, err := srv.Jobs.Get(ctx, req.Name)
 	if err != nil {
