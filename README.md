@@ -1,17 +1,8 @@
-<<<<<<< HEAD
 # Bhojpur Piro - Continuous Integration
-=======
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-# Bhojpur Piro - Kubernetes-native CI
->>>>>>> ca31e51 (.)
 
 A pre-integrated CI/CD system driving many web scale applications and/or services running over the [Bhojpur.NET Platform](https://github.com/bhojpur/platform). On one side, it uses any standard Git repository and drive the _Jobs_ using either Kubernetes/Docker and/or NanoVMs on the other side. It knows no pipelines, just the _Jobs_ and each _Job_ could be a Unikernel application and/or Kubernetes **Pod**. What you do in that _Unikernel_ or _Pod_ is up to you. We do not impose any "declarative pipeline syntax" or some groovy scripting language. Instead, the Bhojpur Piro jobs have run Node, Golang, or Bash scripts in production environments.
 
 Any standard Git repository (e.g. [Bhojpur Seam](https://seam.in.bhojpur.net)) could be integrated with the Bhojpur Piro. Though it is present already in your [Bhojpur.NET Platform](https://github.com/bhojpur/platform) instance, but different variants are built already to suit requirments of specific industry sector.
-
-=======
 
 ---
 
@@ -172,7 +163,7 @@ The default cutter in the Bhojpur Piro expects the following syntax:
 ## Command Line Interface
 
 The Bhojpur Piro sports a powerful continuous integration capability, which can be used to create, list, start and listen to jobs (e.g. Unikernel applications or services) applied in complex data processing.
-=======
+
 
 ### Installation
 
