@@ -1,5 +1,25 @@
 package store
 
+// Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
 import (
 	"context"
 	"fmt"
@@ -34,25 +54,25 @@ type Logs interface {
 	Read(id string) (io.ReadCloser, error)
 }
 
-// Jobs provides access to past jobs
+// Jobs provides access to past Jobs
 type Jobs interface {
-	// Store stores job information in the store.
-	// Storing a job whose name we already have in store will override the previously
-	// stored job.
+	// Store stores schedulable Kubernetes Job information in the Memory / DB store.
+	// Storing a Job whose name we already have in store will override the previously
+	// stored Job.
 	Store(ctx context.Context, job v1.JobStatus) error
 
-	// StoreJobSpec stores job YAML data.
+	// StoreJobSpec stores Job YAML data.
 	StoreJobSpec(name string, data []byte) error
 
-	// Retrieves a particular job bassd on its name.
-	// If the job is unknown we'll return ErrNotFound.
+	// Retrieves a particular Kubernetes Job bassd on its name.
+	// If the Kubernetes Job is unknown we'll return ErrNotFound.
 	Get(ctx context.Context, name string) (*v1.JobStatus, error)
 
-	// Get retrieves previously stored job spec data
+	// Get retrieves previously stored Kubernetes Job spec data
 	GetJobSpec(name string) (data []byte, err error)
 
-	// Searches for jobs based on their annotations. If filter is empty no filter is applied.
-	// If limit is 0, no limit is applied.
+	// Searches for Kubernetes Jobs based on their annotations. If filter is
+	// empty no filter is applied. If limit is 0, no limit is applied.
 	Find(ctx context.Context, filter []*v1.FilterExpression, order []*v1.OrderExpression, start, limit int) (slice []v1.JobStatus, total int, err error)
 }
 

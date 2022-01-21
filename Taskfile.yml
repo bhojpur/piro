@@ -1,0 +1,94 @@
+version: "3"
+
+vars:
+  GREETING: Hello, Piro Developer!
+
+tasks:
+    default:
+        cmds:
+        - echo "{{.GREETING}}"
+        silent: true
+
+    build-web:
+        desc: Build the web application
+        cmds:
+        - GOFLAGS=-mod=mod go build -o bin/piroctl client.go 
+        - GOFLAGS=-mod=mod go build -o bin/pirosvr server.go 
+
+    build-desktop:
+        desc: Build the desktop application for current OS
+        cmds:
+        - fyne package -os macos -icon piro.png
+        - fyne package -os linux -icon piro.png
+        - fyne package -os windows -icon piro.png
+
+    package-android:
+        desc: Package the mobile application for Android
+        cmds:
+        - fyne package -os android -appID net.bhojpur.piro -icon piro.png
+
+    package-ios:
+        desc: Package the mobile application for iOS
+        cmds:
+        - fyne package -os ios -appID net.bhojpur.piro -icon piro.png
+
+    release-macos:
+        desc: Release the native application for macOS App Store
+        cmds:
+        - fyne release -appID net.bhojpur.piro -appVersion 1.0 -appBuild 1 -category business
+
+    release-android:
+        desc: Release the mobile application for Google Play
+        cmds:
+        - fyne release -os android -appID net.bhojpur.piro -appVersion 1.0 -appBuild 1
+
+    release-ios:
+        desc: Release the mobile application for iOS App Store
+        cmds:
+        - fyne release -os ios -appID net.bhojpur.piro -appVersion 1.0 -appBuild 1
+
+    run-web-server:
+        desc: Run the web server application from source code
+        cmds:
+        - GOFLAGS=-mod=mod go run server.go
+ 
+    run-web-client:
+        desc: Run the web client application from source code
+        cmds:
+        - GOFLAGS=-mod=mod go run client.go
+
+    run-mobile:
+        desc: Run the mobile client application on emulator
+        cmds:
+        - GOFLAGS=-mod=mod go run -tags mobile native/main.go
+
+    run-desktop: 
+        desc: Run the desktop application on local host
+        cmds:
+        - GOFLAGS=-mod=mod go run native/main.go
+
+    generate:
+        desc: Generate Go source code from Protool Buffers
+        cmds:
+        - protoc --go_out=plugins=grpc:. --go_opt=paths=source_relative pkg/api/v1/piro.proto
+        - protoc --go_out=plugins=grpc:. --go_opt=paths=source_relative pkg/api/v1/piro-ui.proto
+
+    test:
+        desc: Execute all the Unit Tests
+        cmds:
+        - gotestsum --junitfile test-results/unit-tests.xml -- -short -race -cover -coverprofile test-results/cover.out ./...
+
+    swagger.gen:
+        desc: Generate Go code
+        cmds:
+        - GOFLAGS=-mod=mod go generate bhojpur.net/piro/internal bhojpur.net/piro/pkg/swagger
+
+    swagger.validate:
+        desc: Validate all the Swagger API specifications
+        cmds:
+        - swagger validate pkg/swagger/swagger.yml
+
+    swagger.doc:
+        desc: Generate documentation for Swagger specified APIs
+        cmds:
+        - docker run -i yousan/swagger-yaml-to-html < pkg/swagger/swagger.yml > doc/index.html

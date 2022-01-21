@@ -67,8 +67,8 @@ type Config struct {
 	// ApplicationNodePathPrefix is the location on the node where we place the builds
 	ApplicationNodePathPrefix string `yaml:"applicationNodePathPrefix,omitempty"`
 
-	// CleanupJobSpec is a podspec YAML which forms the basis for cleanup jobs.
-	// Can be empty, in which clean up jobs will use a default.
+	// CleanupJobSpec is a podspec YAML which forms the basis for cleanup Jobs.
+	// Can be empty, in which clean up Jobs will use a default.
 	CleanupJobSpec *configPodSpec `yaml:"cleanupJobSpec,omitempty"`
 
 	// Enables the webui debug proxy pointing to this address
@@ -288,7 +288,7 @@ func (srv *Service) handleJobUpdate(pod *corev1.Pod, s *v1.JobStatus) {
 		return
 	}
 
-	// ensure we have logging, e.g. reestablish joblog for unknown Job(s) (i.e.
+	// ensure we have logging, e.g. re-establish joblog for unknown Job(s) (i.e.
 	// after a restart)
 	srv.ensureLogging(s)
 
@@ -546,12 +546,12 @@ func (srv *Service) RunJob(ctx context.Context, name string, metadata *v1.JobMet
 		}
 	}
 
-	wsVolume := "piro-application"
+	baVolume := "piro-application"
 	if srv.Config.ApplicationNodePathPrefix != "" {
 		nodePath := filepath.Join(srv.Config.ApplicationNodePathPrefix, name)
 		httype := corev1.HostPathDirectoryOrCreate
 		podspec.Volumes = append(podspec.Volumes, corev1.Volume{
-			Name: wsVolume,
+			Name: baVolume,
 			VolumeSource: corev1.VolumeSource{
 				HostPath: &corev1.HostPathVolumeSource{
 					Path: nodePath,
@@ -561,7 +561,7 @@ func (srv *Service) RunJob(ctx context.Context, name string, metadata *v1.JobMet
 		})
 	} else {
 		podspec.Volumes = append(podspec.Volumes, corev1.Volume{
-			Name: wsVolume,
+			Name: baVolume,
 			VolumeSource: corev1.VolumeSource{
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
@@ -574,7 +574,7 @@ func (srv *Service) RunJob(ctx context.Context, name string, metadata *v1.JobMet
 	}
 	for i, ic := range ics {
 		ics[i].VolumeMounts = append(ic.VolumeMounts, corev1.VolumeMount{
-			Name:      wsVolume,
+			Name:      baVolume,
 			ReadOnly:  false,
 			MountPath: "/application",
 		})
@@ -582,7 +582,7 @@ func (srv *Service) RunJob(ctx context.Context, name string, metadata *v1.JobMet
 	podspec.InitContainers = append(podspec.InitContainers, ics...)
 	for i, c := range podspec.Containers {
 		podspec.Containers[i].VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{
-			Name:      wsVolume,
+			Name:      baVolume,
 			ReadOnly:  false,
 			MountPath: "/application",
 		})

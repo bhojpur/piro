@@ -1,5 +1,4 @@
-//go:generate sh -c "[ -f ../../../_deps/pkg-store-postgres--rice/rice-box.go ] && cp ../../../_deps/pkg-store-postgres--rice/rice-box.go ."
-// +generate sh -c "[ -f ../../../_deps/pkg-store-postgres--rice/rice-box.go ] && cp ../../../_deps/pkg-store-postgres--rice/rice-box.go ."
+package pkg
 
 // Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
 
@@ -21,4 +20,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package postgres
+var (
+	BuildVersion     string
+	BuildGitRevision string
+	BuildStatus      string
+	BuildTag         string
+	BuildTime        string
+
+	GoVersion string
+	GitBranch string
+)
+
+const (
+	// VERSION represent Bhojpur Piro - Job Scheduling Framework version.
+	VERSION = "0.0.4"
+)

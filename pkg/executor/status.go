@@ -58,8 +58,7 @@ func getStatus(obj *corev1.Pod, labels labelSet) (status *v1.JobStatus, err erro
 
 	var results []*v1.JobResult
 	if c, ok := obj.Annotations[labels.AnnotationResults]; ok {
-		unmarshaler := &protojson.UnmarshalOptions{}
-		err = unmarshaler.Unmarshal([]byte(c), &results)
+		err = protojson.Unmarshal([]byte(c), &results)
 		if err != nil {
 			return nil, xerrors.Errorf("cannot unmarshal results: %w", err)
 		}

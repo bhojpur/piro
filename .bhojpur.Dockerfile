@@ -18,7 +18,7 @@ RUN curl -o /usr/bin/k3s -L https://github.com/rancher/k3s/releases/download/v1.
     chmod +x /usr/bin/k3s
 
 ENV GORPA_APPLICATION_ROOT=/application/piro
-RUN curl -L https://github.com/bhojpur/gorpa/releases/download/v0.1.0/gorpa_0.0.5_Linux_x86_64.tar.gz | tar xz && \
+RUN curl -L https://github.com/bhojpur/gorpa/releases/download/v0.1.0/gorpa_0.0.6_Linux_x86_64.tar.gz | tar xz && \
     mv gorpa /usr/bin/gorpa && \
     rm README.md
 

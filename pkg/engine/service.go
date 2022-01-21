@@ -139,8 +139,8 @@ func (srv *Service) StartLocalJob(inc v1.PiroService_StartLocalJobServer) error 
 		Clientset:  srv.Executor.Client,
 	}
 
-	// Note: for local jobs we DO NOT store the Job yaml as we cannot replay
-	// those jobs anyways. The context upload is a one time thing and hence
+	// Note: for local Jobs we DO NOT store the Job yaml as we cannot replay
+	// those Jobs anyways. The context upload is a one time thing and hence
 	// prevent job replay.
 	flatOwner := strings.ReplaceAll(strings.ToLower(md.Owner), " ", "")
 	name := cleanupPodName(fmt.Sprintf("local-%s-%s", flatOwner, moniker.New().NameSep("-")))

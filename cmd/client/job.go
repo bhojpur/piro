@@ -26,9 +26,9 @@ import (
 
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
 	"github.com/bhojpur/piro/pkg/prettyprint"
-	"github.com/gogo/protobuf/proto"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
+	"google.golang.org/protobuf/proto"
 )
 
 var (

@@ -1,4 +1,11 @@
+<<<<<<< HEAD
 # Bhojpur Piro - Continuous Integration
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+# Bhojpur Piro - Kubernetes-native CI
+>>>>>>> ca31e51 (.)
 
 A pre-integrated CI/CD system driving many web scale applications and/or services running over the [Bhojpur.NET Platform](https://github.com/bhojpur/platform). On one side, it uses any standard Git repository and drive the _Jobs_ using either Kubernetes/Docker and/or NanoVMs on the other side. It knows no pipelines, just the _Jobs_ and each _Job_ could be a Unikernel application and/or Kubernetes **Pod**. What you do in that _Unikernel_ or _Pod_ is up to you. We do not impose any "declarative pipeline syntax" or some groovy scripting language. Instead, the Bhojpur Piro jobs have run Node, Golang, or Bash scripts in production environments.
 
@@ -157,8 +164,11 @@ The default cutter in the Bhojpur Piro expects the following syntax:
 | `[someID\|FAIL] Reason` | Fail a slice | Marks the `someID` slice as failed becuase of `Reason`. No more output is expected from this slice in this phase. Failing a slice does not automatically fail the job.
 | `[type\|RESULT] content` | Publish a result | Publishes `content` as result of type `type`
 
+<<<<<<< HEAD
 > **Tip**: You can produce this kind of log output using the Bhojpur Piro CLI: `piro log`
+<<<<<<< HEAD
 
+<<<<<<< HEAD
 ## Command Line Interface
 
 The Bhojpur Piro sports a powerful continuous integration capability, which can be used to create, list, start and listen to jobs (e.g. Unikernel applications or services) applied in complex data processing.

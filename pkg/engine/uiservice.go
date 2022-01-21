@@ -156,7 +156,7 @@ func (uis *UIService) updateJobSpecs() error {
 	return nil
 }
 
-// ListJobSpecs returns a list of jobs that can be started through the Piro UI.
+// ListJobSpecs returns a list of Jobs that can be started through the Piro UI.
 func (uis *UIService) ListJobSpecs(req *v1.ListJobSpecsRequest, srv v1.PiroUI_ListJobSpecsServer) error {
 	uis.mu.RLock()
 	defer uis.mu.RUnlock()
