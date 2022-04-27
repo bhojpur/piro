@@ -88,12 +88,12 @@ func (c *compoundRepositoryProvider) RemoteAnnotations(ctx context.Context, repo
 }
 
 // ContentProvider produces a content provider for a particular repo
-func (c *compoundRepositoryProvider) ContentProvider(ctx context.Context, repo *v1.Repository) (piro.ContentProvider, error) {
+func (c *compoundRepositoryProvider) ContentProvider(ctx context.Context, repo *v1.Repository, paths ...string) (piro.ContentProvider, error) {
 	prov, err := c.getProvider(repo.Host)
 	if err != nil {
 		return nil, err
 	}
-	return prov.ContentProvider(ctx, repo)
+	return prov.ContentProvider(ctx, repo, paths...)
 }
 
 // FileProvider provides direct access to repository content
@@ -128,7 +128,7 @@ func (p *pluginHostProvider) Resolve(ctx context.Context, repo *v1.Repository) e
 	return nil
 }
 
-// RemoteAnnotations extracts Bhojpur Piro annotations form information associated
+// RemoteAnnotations extracts piro annotations form information associated
 // with a particular commit, e.g. the commit message, PRs or merge requests.
 func (p *pluginHostProvider) RemoteAnnotations(ctx context.Context, repo *v1.Repository) (annotations map[string]string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -143,10 +143,11 @@ func (p *pluginHostProvider) RemoteAnnotations(ctx context.Context, repo *v1.Rep
 }
 
 // ContentProvider produces a content provider for a particular repo
-func (p *pluginHostProvider) ContentProvider(ctx context.Context, repo *v1.Repository) (piro.ContentProvider, error) {
+func (p *pluginHostProvider) ContentProvider(ctx context.Context, repo *v1.Repository, paths ...string) (piro.ContentProvider, error) {
 	return &pluginContentProvider{
-		Repo: repo,
-		C:    p.C,
+		Repo:  repo,
+		C:     p.C,
+		Paths: paths,
 	}, nil
 }
 
@@ -159,8 +160,9 @@ func (p *pluginHostProvider) FileProvider(ctx context.Context, repo *v1.Reposito
 }
 
 type pluginContentProvider struct {
-	Repo *v1.Repository
-	C    common.RepositoryPluginClient
+	Repo  *v1.Repository
+	C     common.RepositoryPluginClient
+	Paths []string
 }
 
 func (c *pluginContentProvider) InitContainer() (res []corev1.Container, err error) {
@@ -169,6 +171,7 @@ func (c *pluginContentProvider) InitContainer() (res []corev1.Container, err err
 
 	resp, err := c.C.ContentInitContainer(ctx, &common.ContentInitContainerRequest{
 		Repository: c.Repo,
+		Paths:      c.Paths,
 	})
 	if err != nil {
 		return nil, err

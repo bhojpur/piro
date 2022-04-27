@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
 #
@@ -20,7 +20,22 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.26
-go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.1
-export PATH="$PATH:$(go env GOPATH)/bin"
-protoc -I. -I../../ --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative *.proto
+set -eu -o pipefail
+
+VERSION=${1#"v"}
+if [ -z "$VERSION" ]; then
+    echo "Must specify Kubernetes version (e.g. v1.23.5) as script arguments"
+    exit 1
+fi
+MODS=($(
+    curl -sS https://raw.githubusercontent.com/kubernetes/kubernetes/v${VERSION}/go.mod |
+    sed -n 's|.*k8s.io/\(.*\) => ./staging/src/k8s.io/.*|k8s.io/\1|p'
+))
+for MOD in "${MODS[@]}"; do
+    V=$(
+        go mod download -json "${MOD}@kubernetes-${VERSION}" |
+        sed -n 's|.*"Version": "\(.*\)".*|\1|p'
+    )
+    go mod edit "-replace=${MOD}=${MOD}@${V}"
+done
+go get "k8s.io/kubernetes@v${VERSION}"

@@ -44,7 +44,7 @@ type UIService struct {
 	mu    sync.RWMutex
 }
 
-// NewUIService produces a new Piro UI service and initializes its repo list
+// NewUIService produces a new UI service and initializes its repo list
 func NewUIService(repoprov RepositoryProvider, repos []string, readonly bool, updateInterval time.Duration) (*UIService, error) {
 	r := &UIService{
 		RepositoryProvider: repoprov,
@@ -61,7 +61,7 @@ func NewUIService(repoprov RepositoryProvider, repos []string, readonly bool, up
 		for range t.C {
 			err := r.updateJobSpecs()
 			if err != nil {
-				log.WithError(err).Error("cannot update Job specs")
+				log.WithError(err).Error("cannot update job specs")
 			}
 		}
 	}()
@@ -69,8 +69,7 @@ func NewUIService(repoprov RepositoryProvider, repos []string, readonly bool, up
 	return r, nil
 }
 
-// updateJobSpecs updates the cached job spec responses by looking into the
-// configured repositories
+// updateJobSpecs updates the cached job spec responses by looking into the configured repositories
 func (uis *UIService) updateJobSpecs() error {
 	uis.mu.Lock()
 	defer uis.mu.Unlock()
@@ -79,7 +78,7 @@ func (uis *UIService) updateJobSpecs() error {
 	for _, r := range uis.Repos {
 		repo, err := reporef.Parse(r)
 		if err != nil {
-			log.WithError(err).WithField("repo", r).Warn("unable to download Job spec while updating UI")
+			log.WithError(err).WithField("repo", r).Warn("unable to download job spec while updating UI")
 			continue
 		}
 
@@ -87,20 +86,20 @@ func (uis *UIService) updateJobSpecs() error {
 		err = uis.RepositoryProvider.Resolve(ctx, repo)
 		if err != nil {
 			cancel()
-			log.WithError(err).WithField("repo", r).Warn("unable to download Job spec while updating UI")
+			log.WithError(err).WithField("repo", r).Warn("unable to download job spec while updating UI")
 			continue
 		}
 
 		fp, err := uis.RepositoryProvider.FileProvider(ctx, repo)
 		if err != nil {
 			cancel()
-			log.WithError(err).WithField("repo", r).Warn("unable to download Job spec while updating UI")
+			log.WithError(err).WithField("repo", r).Warn("unable to download job spec while updating UI")
 			continue
 		}
 		paths, err := fp.ListFiles(ctx, ".piro")
 		if err != nil {
 			cancel()
-			log.WithError(err).WithField("repo", r).Warn("unable to download Job spec while updating UI")
+			log.WithError(err).WithField("repo", r).Warn("unable to download job spec while updating UI")
 			continue
 		}
 		cancel()
@@ -115,7 +114,7 @@ func (uis *UIService) updateJobSpecs() error {
 			fc, err := fp.Download(ctx, fn)
 			cancel()
 			if err != nil {
-				log.WithError(err).WithField("repo", repo).WithField("path", fn).Warn("unable to download Job spec while updating UI")
+				log.WithError(err).WithField("repo", repo).WithField("path", fn).Warn("unable to download job spec while updating UI")
 				continue
 			}
 
@@ -123,7 +122,7 @@ func (uis *UIService) updateJobSpecs() error {
 			err = yaml.NewDecoder(fc).Decode(&jobspec)
 			fc.Close()
 			if err != nil {
-				log.WithError(err).WithField("repo", repo).WithField("path", fn).Warn("unable to unmarshal Job spec while updating UI")
+				log.WithError(err).WithField("repo", repo).WithField("path", fn).Warn("unable to unmarshal job spec while updating UI")
 				continue
 			}
 
@@ -148,6 +147,7 @@ func (uis *UIService) updateJobSpecs() error {
 				Path:        fn,
 				Description: jobspec.Desc,
 				Arguments:   args,
+				Plugins:     jobspec.Plugins,
 			}
 			uis.cache = append(uis.cache, res)
 		}
@@ -156,7 +156,7 @@ func (uis *UIService) updateJobSpecs() error {
 	return nil
 }
 
-// ListJobSpecs returns a list of Jobs that can be started through the Piro UI.
+// ListJobSpecs returns a list of jobs that can be started through the UI.
 func (uis *UIService) ListJobSpecs(req *v1.ListJobSpecsRequest, srv v1.PiroUI_ListJobSpecsServer) error {
 	uis.mu.RLock()
 	defer uis.mu.RUnlock()
@@ -171,7 +171,7 @@ func (uis *UIService) ListJobSpecs(req *v1.ListJobSpecsRequest, srv v1.PiroUI_Li
 	return nil
 }
 
-// IsReadOnly returns true if the Piro UI is readonly.
+// IsReadOnly returns true if the UI is readonly.
 func (uis *UIService) IsReadOnly(context.Context, *v1.IsReadOnlyRequest) (*v1.IsReadOnlyResponse, error) {
 	return &v1.IsReadOnlyResponse{
 		Readonly: uis.Readonly,

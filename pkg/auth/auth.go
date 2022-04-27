@@ -1,4 +1,4 @@
-syntax = "proto3";
+package auth
 
 // Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
 
@@ -20,39 +20,26 @@ syntax = "proto3";
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package v1;
-option go_package = "github.com/bhojpur/piro/pkg/api/v1";
-import "piro.proto";
+import (
+	"context"
 
-// PiroUI offers services intended for the webui
-service PiroUI {
-    // ListJobSpecs returns a list of jobs that can be started through the UI.
-    rpc ListJobSpecs(ListJobSpecsRequest) returns (stream ListJobSpecsResponse) {};
+	"google.golang.org/grpc"
+)
 
-    // IsReadOnly returns true if the UI is readonly.
-    rpc IsReadOnly(IsReadOnlyRequest) returns (IsReadOnlyResponse) {};
+type AuthenticationProvider interface {
+	// Authenticate tries to authenticate the token
+	Authenticate(ctx context.Context, token string) (*AuthResponse, error)
 }
 
-message ListJobSpecsRequest{}
-
-message ListJobSpecsResponse {
-    Repository repo = 1;
-    string name = 2;
-    string path = 3;
-    string description = 4;
-    repeated DesiredAnnotation arguments = 5;
-    map<string, string> plugins = 6;
+type AuthResponse struct {
+	Known    bool              `json:"known"`
+	Username string            `json:"username"`
+	Metadata map[string]string `json:"metadata,omitempty"`
+	Emails   []string          `json:"emails,omitempty"`
+	Teams    []string          `json:"teams,omitempty"`
 }
 
-// DesiredAnnotation describes an annotation a job should have
-message DesiredAnnotation {
-    string name = 1;
-    bool required = 2;
-    string description = 3;
-}
-
-message IsReadOnlyRequest {}
-
-message IsReadOnlyResponse {
-    bool readonly = 1;
+type Interceptor interface {
+	Unary() grpc.UnaryServerInterceptor
+	Stream() grpc.StreamServerInterceptor
 }

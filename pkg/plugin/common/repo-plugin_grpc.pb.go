@@ -23,7 +23,7 @@ type RepositoryPluginClient interface {
 	// Resolve resolves the repo's revision based on its ref(erence)
 	Resolve(ctx context.Context, in *ResolveRequest, opts ...grpc.CallOption) (*ResolveResponse, error)
 	// ContentInitContainer produces the init container YAML required to initialize
-	// the build context from this repository in /application.
+	// the build context from this repository in /workspace.
 	ContentInitContainer(ctx context.Context, in *ContentInitContainerRequest, opts ...grpc.CallOption) (*ContentInitContainerResponse, error)
 	// Download downloads a file from the repository.
 	Download(ctx context.Context, in *DownloadRequest, opts ...grpc.CallOption) (*DownloadResponse, error)
@@ -106,7 +106,7 @@ type RepositoryPluginServer interface {
 	// Resolve resolves the repo's revision based on its ref(erence)
 	Resolve(context.Context, *ResolveRequest) (*ResolveResponse, error)
 	// ContentInitContainer produces the init container YAML required to initialize
-	// the build context from this repository in /application.
+	// the build context from this repository in /workspace.
 	ContentInitContainer(context.Context, *ContentInitContainerRequest) (*ContentInitContainerResponse, error)
 	// Download downloads a file from the repository.
 	Download(context.Context, *DownloadRequest) (*DownloadResponse, error)

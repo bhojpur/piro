@@ -20,25 +20,15 @@ package prettyprint
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-import (
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
-)
+import "github.com/gogo/protobuf/jsonpb"
 
-// JSONFormat formats everything as JSON
+// JSONFormat formats everythign as JSON
 const JSONFormat Format = "json"
 
 func formatJSON(pp *Content) error {
-	ProtobufToJSON(pp.Obj)
-	return nil
-}
-
-func ProtobufToJSON(message proto.Message) (string, error) {
-	marshaler := protojson.MarshalOptions{
-		Indent:          "  ",
-		UseProtoNames:   true,
-		EmitUnpopulated: true,
+	enc := &jsonpb.Marshaler{
+		EnumsAsInts: false,
+		Indent:      "  ",
 	}
-	b, err := marshaler.Marshal(message)
-	return string(b), err
+	return enc.Marshal(pp.Writer, pp.Obj)
 }

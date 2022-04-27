@@ -26,9 +26,11 @@ import (
 	"io"
 	"io/ioutil"
 	"sync"
+	"time"
 
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
 	"github.com/bhojpur/piro/pkg/filterexpr"
+	"github.com/golang/protobuf/ptypes"
 	"golang.org/x/xerrors"
 )
 
@@ -46,9 +48,10 @@ type inMemoryLogStore struct {
 }
 
 type logSession struct {
-	Data   *bytes.Buffer
-	Reader map[chan []byte]struct{}
-	Mu     sync.RWMutex
+	StartedAt time.Time
+	Data      *bytes.Buffer
+	Reader    map[chan []byte]struct{}
+	Mu        sync.RWMutex
 }
 
 func (l *logSession) Write(p []byte) (n int, err error) {
@@ -129,8 +132,9 @@ func (s *inMemoryLogStore) Open(id string) (io.WriteCloser, error) {
 	}
 
 	lg := &logSession{
-		Data:   bytes.NewBuffer(nil),
-		Reader: make(map[chan []byte]struct{}),
+		Data:      bytes.NewBuffer(nil),
+		Reader:    make(map[chan []byte]struct{}),
+		StartedAt: time.Now(),
 	}
 
 	s.logs[id] = lg
@@ -163,21 +167,42 @@ func (s *inMemoryLogStore) Read(id string) (io.ReadCloser, error) {
 	}), nil
 }
 
-// NewInMemoryJobStore creates a new in-memory Job store
+func (s *inMemoryLogStore) GarbageCollect(olderThan time.Duration) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for id, sess := range s.logs {
+		if time.Since(sess.StartedAt) <= olderThan {
+			continue
+		}
+		delete(s.logs, id)
+
+		sess.Close()
+	}
+
+	return nil
+}
+
+type jobspec struct {
+	YAML []byte
+	Spec v1.JobSpec
+}
+
+// NewInMemoryJobStore creates a new in-memory job store
 func NewInMemoryJobStore() Jobs {
 	return &inMemoryJobStore{
 		jobs:  make(map[string]v1.JobStatus),
-		specs: make(map[string][]byte),
+		specs: make(map[string]*jobspec),
 	}
 }
 
 type inMemoryJobStore struct {
 	jobs  map[string]v1.JobStatus
-	specs map[string][]byte
+	specs map[string]*jobspec
 	mu    sync.RWMutex
 }
 
-// Store stores Job information in the store.
+// Store stores job information in the store.
 // Storing a job whose name we already have in store will override the previously
 // stored job.
 func (s *inMemoryJobStore) Store(ctx context.Context, job v1.JobStatus) error {
@@ -189,7 +214,7 @@ func (s *inMemoryJobStore) Store(ctx context.Context, job v1.JobStatus) error {
 }
 
 // Retrieves a particular job bassd on its name.
-// If the Job is unknown we'll return ErrNotFound.
+// If the job is unknown we'll return ErrNotFound.
 func (s *inMemoryJobStore) Get(ctx context.Context, name string) (*v1.JobStatus, error) {
 	s.mu.RLock()
 	job, ok := s.jobs[name]
@@ -202,7 +227,7 @@ func (s *inMemoryJobStore) Get(ctx context.Context, name string) (*v1.JobStatus,
 	return &job, nil
 }
 
-// Searches for Job(s) based on their annotations
+// Searches for jobs based on their annotations
 func (s *inMemoryJobStore) Find(ctx context.Context, filter []*v1.FilterExpression, order []*v1.OrderExpression, start, limit int) (slice []v1.JobStatus, total int, err error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -217,21 +242,45 @@ func (s *inMemoryJobStore) Find(ctx context.Context, filter []*v1.FilterExpressi
 	return res, len(res), nil
 }
 
-func (s *inMemoryJobStore) StoreJobSpec(name string, data []byte) error {
+func (s *inMemoryJobStore) StoreJobSpec(name string, spec v1.JobSpec, data []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.specs[name] = data
+	s.specs[name] = &jobspec{
+		YAML: data,
+		Spec: spec,
+	}
 	return nil
 }
 
-func (s *inMemoryJobStore) GetJobSpec(name string) (data []byte, err error) {
+func (s *inMemoryJobStore) GetJobSpec(name string) (spec *v1.JobSpec, data []byte, err error) {
 	s.mu.RLock()
-	s.mu.RUnlock()
+	defer s.mu.RUnlock()
 
-	data, ok := s.specs[name]
+	res, ok := s.specs[name]
 	if !ok {
-		return nil, ErrNotFound
+		return nil, nil, ErrNotFound
 	}
-	return data, nil
+	return &res.Spec, res.YAML, nil
+}
+
+func (s *inMemoryJobStore) GarbageCollect(olderThan time.Duration) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for id, job := range s.jobs {
+		t, err := ptypes.Timestamp(job.Metadata.Created)
+		if err != nil {
+			continue
+		}
+		if job.Phase != v1.JobPhase_PHASE_DONE {
+			continue
+		}
+		if time.Since(t) <= olderThan {
+			continue
+		}
+		delete(s.jobs, id)
+	}
+
+	return nil
 }

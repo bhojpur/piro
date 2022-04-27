@@ -36,9 +36,11 @@ import (
 	"time"
 
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
+	"github.com/bhojpur/piro/pkg/auth"
 	piro "github.com/bhojpur/piro/pkg/engine"
 	"github.com/bhojpur/piro/pkg/plugin/common"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 	"golang.org/x/xerrors"
 	"google.golang.org/grpc"
 	"gopkg.in/yaml.v3"
@@ -63,14 +65,19 @@ type Plugins struct {
 	stopwg   sync.WaitGroup
 
 	sockets      map[string]string
-	piroService  v1.PiroServiceServer
-	serviceConf  piro.Service
+	piroService v1.PiroServiceServer
+	uiService    v1.PiroUIServer
 	repoProvider *compoundRepositoryProvider
+	authProvider pluginsAuthProvider
 }
 
 // RepositoryProvider provides access to all repo providers contributed via plugins
 func (p *Plugins) RepositoryProvider() piro.RepositoryProvider {
 	return p.repoProvider
+}
+
+func (p *Plugins) AuthProvider() auth.AuthenticationProvider {
+	return p.authProvider
 }
 
 // Stop stops all plugins
@@ -83,21 +90,44 @@ func (p *Plugins) Stop() {
 	}
 }
 
+type pluginsAuthProvider []common.AuthenticationPluginClient
+
+func (p pluginsAuthProvider) Authenticate(ctx context.Context, token string) (*auth.AuthResponse, error) {
+	for _, ap := range p {
+		resp, err := ap.Authenticate(ctx, &common.AuthenticateRequest{Token: token})
+		if err != nil {
+			return nil, err
+		}
+		if resp.Known {
+			return &auth.AuthResponse{
+				Known:    true,
+				Username: resp.Username,
+				Metadata: resp.Metadata,
+				Emails:   resp.Emails,
+				Teams:    resp.Teams,
+			}, nil
+		}
+	}
+
+	return &auth.AuthResponse{Known: false}, nil
+}
+
 // Error is passed down the plugins error chan
 type Error struct {
 	Err error
 	Reg *Registration
 }
 
-// Start starts all configured Bhojpur Piro plugins
-func Start(cfg Config, srv *v1.PiroServiceServer, svc *piro.Service) (*Plugins, error) {
+// Start starts all configured plugins
+func Start(cfg Config, srv v1.PiroServiceServer, uisrv v1.PiroUIServer) (*Plugins, error) {
 	errchan, stopchan := make(chan Error), make(chan struct{})
 
 	plugins := &Plugins{
 		Errchan:      errchan,
 		stopchan:     stopchan,
 		sockets:      make(map[string]string),
-		piroService:  *srv,
+		piroService: srv,
+		uiService:    uisrv,
 		repoProvider: &compoundRepositoryProvider{},
 	}
 
@@ -116,7 +146,9 @@ func (p *Plugins) socketFor(t common.Type) (string, error) {
 	case common.TypeIntegration:
 		return p.socketForIntegrationPlugin()
 	case common.TypeRepository:
-		return p.sockerForRepositoryPlugin()
+		return p.socketForRepositoryPlugin()
+	case common.TypeAuthentication:
+		return p.socketForAuthPlugin()
 	default:
 		return "", xerrors.Errorf("unknown plugin type %s", t)
 	}
@@ -130,10 +162,11 @@ func (p *Plugins) socketForIntegrationPlugin() (string, error) {
 	socketFN := filepath.Join(os.TempDir(), fmt.Sprintf("piro-plugin-integration-%d.sock", time.Now().UnixNano()))
 	lis, err := net.Listen("unix", socketFN)
 	if err != nil {
-		return "", xerrors.Errorf("cannot start Bhojpur Piro integration plugin server: %w", err)
+		return "", xerrors.Errorf("cannot start integration plugin server: %w", err)
 	}
 	s := grpc.NewServer()
 	v1.RegisterPiroServiceServer(s, p.piroService)
+	v1.RegisterPiroUIServer(s, p.uiService)
 	go func() {
 		err := s.Serve(lis)
 		if err != nil {
@@ -154,8 +187,12 @@ func (p *Plugins) socketForIntegrationPlugin() (string, error) {
 	return socketFN, nil
 }
 
-func (p *Plugins) sockerForRepositoryPlugin() (string, error) {
+func (p *Plugins) socketForRepositoryPlugin() (string, error) {
 	return filepath.Join(os.TempDir(), fmt.Sprintf("piro-plugin-repo-%d.sock", time.Now().UnixNano())), nil
+}
+
+func (p *Plugins) socketForAuthPlugin() (string, error) {
+	return filepath.Join(os.TempDir(), fmt.Sprintf("piro-plugin-auth-%d.sock", time.Now().UnixNano())), nil
 }
 
 func (p *Plugins) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
@@ -264,11 +301,12 @@ func (p *Plugins) startPlugin(reg Registration) error {
 			pluginLog.Info("stopping plugin")
 			mayFail = true
 			if cmd.Process != nil {
-				cmd.Process.Kill()
+				unix.Kill(-cmd.Process.Pid, unix.SIGKILL)
 			}
 		}()
 
-		if t == common.TypeRepository {
+		switch t {
+		case common.TypeRepository:
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
@@ -277,10 +315,48 @@ func (p *Plugins) startPlugin(reg Registration) error {
 			if err != nil {
 				return err
 			}
+		case common.TypeAuthentication:
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			c, err := p.tryAndConnectToAuthProvider(ctx, pluginLog, socket)
+			if err != nil {
+				return err
+			}
+			p.authProvider = append(p.authProvider, c)
 		}
 	}
 
 	return nil
+}
+
+func (p *Plugins) tryAndConnectToAuthProvider(ctx context.Context, pluginLog *log.Entry, socket string) (common.AuthenticationPluginClient, error) {
+	var (
+		t        = time.NewTicker(2 * time.Second)
+		firstrun = make(chan struct{}, 1)
+		conn     *grpc.ClientConn
+		err      error
+	)
+	firstrun <- struct{}{}
+
+	defer t.Stop()
+	for {
+		select {
+		case <-firstrun:
+		case <-t.C:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-p.stopchan:
+			return nil, nil
+		}
+
+		conn, err = grpc.Dial("unix://"+socket, grpc.WithInsecure())
+		if err != nil {
+			pluginLog.Debug("cannot connect to socket (yet)")
+			continue
+		}
+		return common.NewAuthenticationPluginClient(conn), nil
+	}
 }
 
 func (p *Plugins) tryAndRegisterRepoProvider(ctx context.Context, pluginLog *log.Entry, socket string) error {

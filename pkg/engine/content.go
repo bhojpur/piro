@@ -39,25 +39,23 @@ import (
 )
 
 const (
-	// PathPiroConfig is the path relative to the repo root where we expect to
-	// find the Bhojpur Piro config YAML
+	// PathPiroConfig is the path relative to the repo root where we expect to find the Piro config YAML
 	PathPiroConfig = ".piro/config.yaml"
 )
 
-// RepositoryProvider provides access to a Git repository
+// RepositoryProvider provides access to a repository
 type RepositoryProvider interface {
 	// Resolve resolves the repo's revision based on its ref(erence).
 	// If the revision is already set, this operation does nothing.
 	Resolve(ctx context.Context, repo *v1.Repository) error
 
-	// RemoteAnnotations extracts Bhojpur Piro annotations form information
-	// associated with a particular commit, e.g. the commit message, PRs or
-	// merge requests. Implementors can expect the revision of the repo object
-	// to be set.
+	// RemoteAnnotations extracts Piro annotations form information associated
+	// with a particular commit, e.g. the commit message, PRs or merge requests.
+	// Implementors can expect the revision of the repo object to be set.
 	RemoteAnnotations(ctx context.Context, repo *v1.Repository) (annotations map[string]string, err error)
 
 	// ContentProvider produces a content provider for a particular repo
-	ContentProvider(ctx context.Context, repo *v1.Repository) (ContentProvider, error)
+	ContentProvider(ctx context.Context, repo *v1.Repository, path ...string) (ContentProvider, error)
 
 	// FileProvider provides direct access to repository content
 	FileProvider(ctx context.Context, repo *v1.Repository) (FileProvider, error)
@@ -68,35 +66,33 @@ var errNotSupported = xerrors.Errorf("not supported")
 // NoopRepositoryProvider provides no access to no repository
 type NoopRepositoryProvider struct{}
 
-// Resolve resolves the Git repository's revision based on its ref(erence).
+// Resolve resolves the repo's revision based on its ref(erence).
 // If the revision is already set, this operation does nothing.
 func (NoopRepositoryProvider) Resolve(ctx context.Context, repo *v1.Repository) error {
 	return errNotSupported
 }
 
-// RemoteAnnotations extracts Bhojpur Piro annotations form information
-// associated with a particular commit, e.g. the commit message, PRs or
-// merge requests. Implementors can expect the revision of the repository
-// object to be set.
+// RemoteAnnotations extracts Piro annotations form information associated
+// with a particular commit, e.g. the commit message, PRs or merge requests.
+// Implementors can expect the revision of the repo object to be set.
 func (NoopRepositoryProvider) RemoteAnnotations(ctx context.Context, repo *v1.Repository) (annotations map[string]string, err error) {
 	return nil, errNotSupported
 }
 
-// ContentProvider produces a content provider for a particular Git repository
-func (NoopRepositoryProvider) ContentProvider(ctx context.Context, repo *v1.Repository) (ContentProvider, error) {
+// ContentProvider produces a content provider for a particular repo
+func (NoopRepositoryProvider) ContentProvider(ctx context.Context, repo *v1.Repository, paths ...string) (ContentProvider, error) {
 	return nil, errNotSupported
 }
 
-// FileProvider provides direct access to Git repository content
+// FileProvider provides direct access to repository content
 func (NoopRepositoryProvider) FileProvider(ctx context.Context, repo *v1.Repository) (FileProvider, error) {
 	return nil, errNotSupported
 }
 
-// ContentProvider provides access to a Kubernetes Job on the Bhojpur.NET
-// Platform application content
+// ContentProvider provides access to job workspace content
 type ContentProvider interface {
-	// InitContainer builds the container that will initialize the Job content.
-	// The VolumeMount for /application is added by the caller.
+	// InitContainer builds the container that will initialize the job content.
+	// The VolumeMount for /workspace is added by the caller.
 	// Name and ImagePullPolicy will be overwriten.
 	InitContainer() ([]corev1.Container, error)
 
@@ -111,8 +107,8 @@ type FileProvider interface {
 	Download(ctx context.Context, path string) (io.ReadCloser, error)
 
 	// ListFiles lists all files in a directory. If path is not a directory
-	// an error may be returned or just an empty list of paths. The paths
-	// returned are all relative to the repo root.
+	// an error may be returned or just an empty list of paths. The paths returned
+	// are all relative to the repo root.
 	ListFiles(ctx context.Context, path string) (paths []string, err error)
 }
 
@@ -125,14 +121,14 @@ type LocalContentProvider struct {
 	Clientset  kubernetes.Interface
 }
 
-// InitContainer builds the container that will initialize the Job content.
+// InitContainer builds the container that will initialize the job content.
 func (lcp *LocalContentProvider) InitContainer() ([]corev1.Container, error) {
 	return []corev1.Container{
 		{
 			Name:       "content-upload",
 			Image:      "alpine:latest",
-			Command:    []string{"sh", "-c", "while [ ! -f /application/.ready ]; do [ -f /application/.failed ] && exit 1; sleep 1; done"},
-			WorkingDir: "/application",
+			Command:    []string{"sh", "-c", "while [ ! -f /workspace/.ready ]; do [ -f /workspace/.failed ] && exit 1; sleep 1; done"},
+			WorkingDir: "/workspace",
 		},
 	}, nil
 }
@@ -165,7 +161,7 @@ func (lcp *LocalContentProvider) copyToPod(name string) error {
 		SubResource("exec").
 		VersionedParams(&corev1.PodExecOptions{
 			Container: "piro-checkout",
-			Command:   []string{"sh", "-c", "cd /application && tar xz; if [ $? == 0 ]; then touch .ready; else touch .failed; fi"},
+			Command:   []string{"sh", "-c", "cd /workspace && tar xz; if [ $? == 0 ]; then touch .ready; else touch .failed; fi"},
 			Stdin:     true,
 			Stdout:    true,
 			Stderr:    true,
@@ -191,8 +187,7 @@ func (lcp *LocalContentProvider) copyToPod(name string) error {
 	return nil
 }
 
-// tarWithReadyFile adds a gzipped tar entry containting an empty file named
-// .ready to the stream
+// tarWithReadyFile adds a gzipped tar entry containting an empty file named .ready to the stream
 type tarWithReadyFile struct {
 	O         io.Reader
 	remainder []byte
@@ -233,8 +228,6 @@ func (t *tarWithReadyFile) Read(p []byte) (n int, err error) {
 
 // SideloadingContentProvider first runs the delegate and then sideloads files
 type SideloadingContentProvider struct {
-	Delegate ContentProvider
-
 	TarStream  io.Reader
 	Namespace  string
 	Kubeconfig *rest.Config
@@ -243,33 +236,24 @@ type SideloadingContentProvider struct {
 
 // InitContainer adds the sideload init container
 func (s *SideloadingContentProvider) InitContainer() ([]corev1.Container, error) {
-	res, err := s.Delegate.InitContainer()
-	if err != nil {
-		return nil, err
-	}
-
-	res = append(res, corev1.Container{
+	res := []corev1.Container{{
 		Name:  "sideload",
 		Image: "alpine/git:latest",
 		Command: []string{
 			"sh", "-c",
-			"echo waiting for sideload; while [ ! -f /application/.ready ]; do [ -f /application/.failed ] && exit 1; sleep 1; done",
+			"echo waiting for sideload; while [ ! -f /workspace/.ready ]; do [ -f /workspace/.failed ] && exit 1; sleep 1; done",
 		},
-		WorkingDir: "/application",
-	})
+		WorkingDir: "/workspace",
+	}}
 	return res, nil
 }
 
 // Serve serves the actual sideload
 func (s *SideloadingContentProvider) Serve(jobName string) error {
-	err := s.Delegate.Serve(jobName)
-	if err != nil {
-		return err
-	}
-
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
+	log.WithField("jobName", jobName).Debug("serving sideload")
 	for {
 		err := s.sideload(jobName)
 		if err == nil {
@@ -293,7 +277,7 @@ func (s *SideloadingContentProvider) sideload(jobName string) error {
 		SubResource("exec").
 		VersionedParams(&corev1.PodExecOptions{
 			Container: "sideload",
-			Command:   []string{"sh", "-c", "cd /application && tar xz; if [ $? == 0 ]; then touch .ready; else touch .failed; fi"},
+			Command:   []string{"sh", "-c", "cd /workspace && tar xz; if [ $? == 0 ]; then touch .ready; else touch .failed; fi"},
 			Stdin:     true,
 			Stdout:    true,
 			Stderr:    true,
@@ -316,5 +300,38 @@ func (s *SideloadingContentProvider) sideload(jobName string) error {
 		return err
 	}
 
+	return nil
+}
+
+type CompositeContentProvider []ContentProvider
+
+var _ ContentProvider = CompositeContentProvider{}
+
+// InitContainer builds the container that will initialize the job content.
+// The VolumeMount for /workspace is added by the caller.
+// Name and ImagePullPolicy will be overwriten.
+func (c CompositeContentProvider) InitContainer() ([]corev1.Container, error) {
+	var res []corev1.Container
+	for _, contentProv := range c {
+		ics, err := contentProv.InitContainer()
+		if err != nil {
+			return nil, err
+		}
+		for _, ic := range ics {
+			res = append(res, ic)
+		}
+	}
+	return res, nil
+}
+
+// Serve provides additional services required during initialization.
+// This function is expected to return immediately.
+func (c CompositeContentProvider) Serve(jobName string) error {
+	for _, contentProv := range c {
+		err := contentProv.Serve(jobName)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }

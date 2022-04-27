@@ -1,4 +1,4 @@
-syntax = "proto3";
+package cmd
 
 // Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
 
@@ -20,39 +20,42 @@ syntax = "proto3";
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package v1;
-option go_package = "github.com/bhojpur/piro/pkg/api/v1";
-import "piro.proto";
+import (
+	v1 "github.com/bhojpur/piro/pkg/api/v1"
+	"github.com/spf13/cobra"
+)
 
-// PiroUI offers services intended for the webui
-service PiroUI {
-    // ListJobSpecs returns a list of jobs that can be started through the UI.
-    rpc ListJobSpecs(ListJobSpecsRequest) returns (stream ListJobSpecsResponse) {};
+// jobStopCmd represents the list command
+var jobStopCmd = &cobra.Command{
+	Use:   "stop [name]",
+	Short: "Stop a job",
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		conn := dial()
+		defer conn.Close()
+		client := v1.NewPiroServiceClient(conn)
 
-    // IsReadOnly returns true if the UI is readonly.
-    rpc IsReadOnly(IsReadOnlyRequest) returns (IsReadOnlyResponse) {};
+		name, localJobContext, err := getLocalJobName(client, args)
+		if err != nil {
+			return err
+		}
+		ctx, cancel, err := getRequestContext(localJobContext)
+		if err != nil {
+			return err
+		}
+		defer cancel()
+
+		_, err = client.StopJob(ctx, &v1.StopJobRequest{
+			Name: name,
+		})
+		if err != nil {
+			return err
+		}
+
+		return nil
+	},
 }
 
-message ListJobSpecsRequest{}
-
-message ListJobSpecsResponse {
-    Repository repo = 1;
-    string name = 2;
-    string path = 3;
-    string description = 4;
-    repeated DesiredAnnotation arguments = 5;
-    map<string, string> plugins = 6;
-}
-
-// DesiredAnnotation describes an annotation a job should have
-message DesiredAnnotation {
-    string name = 1;
-    bool required = 2;
-    string description = 3;
-}
-
-message IsReadOnlyRequest {}
-
-message IsReadOnlyResponse {
-    bool readonly = 1;
+func init() {
+	jobCmd.AddCommand(jobStopCmd)
 }

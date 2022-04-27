@@ -1,5 +1,25 @@
 syntax = "proto3";
 
+// Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
 package v1;
 option go_package = "github.com/bhojpur/piro/pkg/api/v1";
 import "google/protobuf/timestamp.proto";
@@ -15,30 +35,32 @@ service PiroService {
     //   5. the Bhojpur.NET Platform application tar stream done marker
     rpc StartLocalJob(stream StartLocalJobRequest) returns (StartJobResponse) {};
 
-    // StartGitHubJob starts a Job on a GitHub context, possibly with a custom job.
+    // StartGitHubJob starts a job on a Git context, possibly with a custom job.
     rpc StartGitHubJob(StartGitHubJobRequest) returns (StartJobResponse) {};
 
-    // StartFromPreviousJob starts a new Job based on a previous one.
-    // If the previous Job does not have the can-replay condition set this call
-    // will result in an error.
+    // StartFromPreviousJob starts a new job based on a previous one.
+    // If the previous job does not have the can-replay condition set this call will result in an error.
     rpc StartFromPreviousJob(StartFromPreviousJobRequest) returns (StartJobResponse) {};
 
-    // StartJobRequest starts a new Job based on its specification.
+    // StartJobRequest starts a new job based on its specification.
     rpc StartJob(StartJobRequest) returns (StartJobResponse) {};
 
-    // Searches for Jobs known to this instance
+    // StartJob2 starts a new job based on its specification.
+    rpc StartJob2(StartJobRequest2) returns (StartJobResponse) {};
+
+    // Searches for jobs known to this instance
     rpc ListJobs(ListJobsRequest) returns (ListJobsResponse) {};
 
-    // Subscribe listens to new Job(s) updates
+    // Subscribe listens to new jobs/job updates
     rpc Subscribe(SubscribeRequest) returns (stream SubscribeResponse) {};
 
-    // GetJob retrieves details of a single Job
+    // GetJob retrieves details of a single job
     rpc GetJob(GetJobRequest) returns (GetJobResponse) {};
 
-    // Listen listens to Job updates and log output of a running Job
+    // Listen listens to job updates and log output of a running job
     rpc Listen(ListenRequest) returns (stream ListenResponse) {};
 
-    // StopJob stops a currently running Job
+    // StopJob stops a currently running job
     rpc StopJob(StopJobRequest) returns (StopJobResponse) {};
 }
 
@@ -47,8 +69,8 @@ message StartLocalJobRequest {
         JobMetadata metadata = 1;
         bytes config_yaml = 2;
         bytes job_yaml = 3;
-        bytes application_tar = 4;
-        bool application_tar_done = 5;
+        bytes workspace_tar = 4;
+        bool workspace_tar_done = 5;
     };
 }
 
@@ -73,6 +95,27 @@ message StartJobRequest {
     bytes sideload = 4; 
     google.protobuf.Timestamp wait_until = 5;
     string name_suffix = 6;
+}
+
+message StartJobRequest2 {
+    JobMetadata metadata = 1;
+    JobSpec spec = 2;
+}
+
+message JobSpec {
+    message FromRepo {
+        Repository repo = 1;
+        string path = 2;
+    }
+
+    oneof source {
+        bytes job_yaml = 2;
+        string job_path = 3;
+        FromRepo repo = 4;
+    }
+    bytes direct_sideload = 5;
+    repeated FromRepo repo_sideload = 6;
+    string name_suffix = 7;
 }
 
 message StartFromPreviousJobRequest {
@@ -160,6 +203,7 @@ message JobStatus {
     JobConditions conditions = 4;
     string details = 5;
     repeated JobResult results = 6;
+    JobSpec spec = 7;
 }
 
 message JobMetadata {
@@ -178,6 +222,7 @@ message Repository {
     string repo = 3;
     string ref = 4;
     string revision = 5;
+    string default_branch = 6;
 }
 
 message Annotation {
@@ -193,26 +238,26 @@ enum JobTrigger {
 }
 
 enum JobPhase {
-    // Unknown means we don't know what state the Kubernetes Job is in
+    // Unknown means we don't know what state the job is in
     PHASE_UNKNOWN = 0;
 
-    // Preparing means the Job hasn't started yet and isn't consuming resources in the system
+    // Preparing means the job hasn't started yet and isn't consuming resources in the system
     PHASE_PREPARING = 1;
 
-    // Starting means the Job has been scheduled and is waiting to run. Things that might prevent it
+    // Starting means the job has been scheduled and is waiting to run. Things that might prevent it
 	// from running already are pod scheduling, image pull or container startup.
     PHASE_STARTING = 2;
 
-    // Running means the Job is actually running and doing work.
+    // Running means the job is actually running and doing work.
     PHASE_RUNNING = 3;
 
-    // Done means the Job has run and is finished
+    // Done means the job has run and is finished
     PHASE_DONE = 4;
 
-    // Cleaning means the Job is in post-run cleanup
+    // Cleaning means the job is in post-run cleanup
     PHASE_CLEANUP = 5;
 
-    // Waiting means the Job is waiting for its start time or some other condition to be met
+    // Waiting means the job is waiting for its start time or some other condition to be met
     PHASE_WAITING = 6;
 }
 

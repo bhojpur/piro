@@ -38,11 +38,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type Services struct {
+	v1.PiroServiceClient
+	v1.PiroUIClient
+}
+
 // IntegrationPlugin works on the public Bhojpur Piro API
 type IntegrationPlugin interface {
 	// Run runs the plugin. Once this function returns the plugin stops running.
 	// Implementors must respect the context deadline as that's the signal for graceful shutdown.
-	Run(ctx context.Context, config interface{}, srv v1.PiroServiceClient) error
+	Run(ctx context.Context, config interface{}, srv *Services) error
 }
 
 // RepositoryPlugin adds support for a repository host
@@ -50,6 +55,13 @@ type RepositoryPlugin interface {
 	// Run runs the plugin. The plugin runs until the context is canceled and the server returned
 	// by this function is expected to remain functional until then.
 	Run(ctx context.Context, config interface{}) (common.RepositoryPluginServer, error)
+}
+
+// AuthenticationPlugin adds support for API authentication
+type AuthenticationPlugin interface {
+	// Run runs the plugin. The plugin runs until the context is canceled and the server returned
+	// by this function is expected to remain functional until then.
+	Run(ctx context.Context, config interface{}) (common.AuthenticationPluginServer, error)
 }
 
 // ServeOpt configures a plugin serve
@@ -68,9 +80,11 @@ func WithIntegrationPlugin(p IntegrationPlugin) ServeOpt {
 				return xerrors.Errorf("did not connect: %v", err)
 			}
 			defer conn.Close()
-			client := v1.NewPiroServiceClient(conn)
 
-			return p.Run(ctx, config, client)
+			return p.Run(ctx, config, &Services{
+				PiroServiceClient: v1.NewPiroServiceClient(conn),
+				PiroUIClient:      v1.NewPiroUIClient(conn),
+			})
 		},
 	}
 }
@@ -96,6 +110,27 @@ func WithRepositoryPlugin(p RepositoryPlugin) ServeOpt {
 	}
 }
 
+// WithRepositoryPlugin registers repo plugin capabilities
+func WithAuthenticationPlugin(p AuthenticationPlugin) ServeOpt {
+	return ServeOpt{
+		Type: common.TypeAuthentication,
+		Run: func(ctx context.Context, config interface{}, socket string) error {
+			lis, err := net.Listen("unix", socket)
+			if err != nil {
+				return err
+			}
+			service, err := p.Run(ctx, config)
+			if err != nil {
+				return err
+			}
+
+			s := grpc.NewServer()
+			common.RegisterAuthenticationPluginServer(s, service)
+			return s.Serve(lis)
+		},
+	}
+}
+
 const proxyPassPluginType common.Type = "proxy-pass"
 
 // ProxyPassPlugin adds additional support for proxied webhooks
@@ -103,7 +138,7 @@ type ProxyPassPlugin interface {
 	Serve(ctx context.Context, l net.Listener) error
 }
 
-// WithProxyPass enables a "through piro" proxy route to the plugin.
+// WithProxyPass enables a "through Piro" proxy route to the plugin.
 // The route will be available at "http://<piro-location>/plugins/<plugin-name>"
 func WithProxyPass(p ProxyPassPlugin) ServeOpt {
 	return ServeOpt{
@@ -118,7 +153,7 @@ func WithProxyPass(p ProxyPassPlugin) ServeOpt {
 	}
 }
 
-// Serve is the main entry point for Bhojpur Piro plugins
+// Serve is the main entry point for plugins
 func Serve(configType interface{}, opts ...ServeOpt) {
 	if typ := reflect.TypeOf(configType); typ.Kind() != reflect.Ptr {
 		log.Fatal("configType is not a pointer")

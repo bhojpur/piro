@@ -29,4 +29,7 @@ const (
 
 	// TypeRepository means the plugin can add support for remote repositories (e.g. GitHub)
 	TypeRepository Type = "repository"
+
+	// TypeAuthentication means the plugin can add support for authenticating requests (e.g. against GitHub)
+	TypeAuthentication Type = "auth"
 )

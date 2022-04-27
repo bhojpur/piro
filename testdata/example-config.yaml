@@ -5,7 +5,7 @@ service:
   webPort: 8080
   grpcPort: 7777
   jobSpecRepos:
-  - 32leaves/test-repo:werft
+  - 32leaves/test-repo:piro
 kubeconfig: "/home/bhojpur/.kube/config"
 executor:
   preperationTimeout: 10m

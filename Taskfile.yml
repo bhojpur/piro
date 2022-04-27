@@ -1,7 +1,7 @@
 version: "3"
 
 vars:
-  GREETING: Hello, Piro Developer!
+  GREETING: Hello, Bhojpur Piro Developer!
 
 tasks:
     default:
@@ -18,34 +18,34 @@ tasks:
     build-desktop:
         desc: Build the desktop application for current OS
         cmds:
-        - fyne package -os macos -icon piro.png
-        - fyne package -os linux -icon piro.png
-        - fyne package -os windows -icon piro.png
+        - guiutl package -os macos -icon piro.png
+        - guiutl package -os linux -icon piro.png
+        - guiutl package -os windows -icon piro.png
 
     package-android:
         desc: Package the mobile application for Android
         cmds:
-        - fyne package -os android -appID net.bhojpur.piro -icon piro.png
+        - guiutl package -os android -appID net.bhojpur.piro -icon piro.png
 
     package-ios:
         desc: Package the mobile application for iOS
         cmds:
-        - fyne package -os ios -appID net.bhojpur.piro -icon piro.png
+        - guiutl package -os ios -appID net.bhojpur.piro -icon piro.png
 
     release-macos:
         desc: Release the native application for macOS App Store
         cmds:
-        - fyne release -appID net.bhojpur.piro -appVersion 1.0 -appBuild 1 -category business
+        - guiutl release -appID net.bhojpur.piro -appVersion 1.0 -appBuild 1 -category business
 
     release-android:
         desc: Release the mobile application for Google Play
         cmds:
-        - fyne release -os android -appID net.bhojpur.piro -appVersion 1.0 -appBuild 1
+        - guiutl release -os android -appID net.bhojpur.piro -appVersion 1.0 -appBuild 1
 
     release-ios:
         desc: Release the mobile application for iOS App Store
         cmds:
-        - fyne release -os ios -appID net.bhojpur.piro -appVersion 1.0 -appBuild 1
+        - guiutl release -os ios -appID net.bhojpur.piro -appVersion 1.0 -appBuild 1
 
     run-web-server:
         desc: Run the web server application from source code

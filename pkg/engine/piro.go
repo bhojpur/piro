@@ -39,12 +39,12 @@ import (
 	"github.com/bhojpur/piro/pkg/executor"
 	"github.com/bhojpur/piro/pkg/logcutter"
 	"github.com/bhojpur/piro/pkg/store"
+	"github.com/golang/protobuf/ptypes"
 	"github.com/olebedev/emitter"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/segmentio/textio"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	k8sjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
@@ -53,23 +53,26 @@ import (
 )
 
 var (
-	// annotationCleanupJob is set on Kubernetes Jobs which cleanup after an
-	// actual user-started job. These kind of Job(s) are not stored in the
-	// database and do not propagate through the system.
+	// annotationCleanupJob is set on jobs which cleanup after an actual user-started job.
+	// These kind of jobs are not stored in the database and do not propagate through the system.
 	annotationCleanupJob = "cleanupJob"
 )
 
-// Config configures the behaviour of the Bhojpur Piro service
+// Config configures the behaviour of the service
 type Config struct {
-	// BaseURL is the URL this service is available on (e.g. https://piro.bhojpur.net)
+	// BaseURL is the URL this service is available on (e.g. https://piro.some-domain.com)
 	BaseURL string `yaml:"baseURL,omitempty"`
 
-	// ApplicationNodePathPrefix is the location on the node where we place the builds
-	ApplicationNodePathPrefix string `yaml:"applicationNodePathPrefix,omitempty"`
+	// WorkspaceNodePathPrefix is the location on the node where we place the builds
+	WorkspaceNodePathPrefix string `yaml:"workspaceNodePathPrefix,omitempty"`
 
-	// CleanupJobSpec is a podspec YAML which forms the basis for cleanup Jobs.
-	// Can be empty, in which clean up Jobs will use a default.
+	// CleanupJobSpec is a podspec YAML which forms the basis for cleanup jobs.
+	// Can be empty, in which clean up jobs will use a default.
 	CleanupJobSpec *configPodSpec `yaml:"cleanupJobSpec,omitempty"`
+
+	// GCOlderThan enables the garbage collector which collects all jobs and
+	// logs older than the configured duration.
+	GCOlderThan *executor.Duration `yaml:"gcOlderThan,omitempty"`
 
 	// Enables the webui debug proxy pointing to this address
 	DebugProxy string
@@ -119,95 +122,45 @@ type Service struct {
 	}
 }
 
-// Start sets up everything to run this Bhojpur Piro server instance, including
-// executor config
+// Start sets up everything to run this Piro instance, including executor config
 func (srv *Service) Start() error {
 	if srv.logListener == nil {
 		srv.logListener = make(map[string]*jobLog)
 	}
 	srv.Executor.OnUpdate = srv.handleJobUpdate
 
-	// set up Prometheus gauges
+	// set up prometheus gauges
 	srv.metrics.GithubJobPreparationSeconds = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "github_job_preparation_seconds",
-		Help:    "Time it took to retrieve all required data from GitHub prior to starting a Job",
+		Help:    "Time it took to retrieve all required data from GitHub prior to starting a job",
 		Buckets: []float64{0, 0.25, 0.5, 0.75, 1},
 	})
 	srv.metrics.ExecutorJobPreperationSeconds = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "piro",
 		Subsystem: "executor",
 		Name:      "job_preparation_seconds",
-		Help:      "Time it took to start executing the Job",
+		Help:      "Time it took to start executing the job",
 		Buckets:   []float64{0, 0.25, 0.5, 0.75, 1},
 	})
 	srv.metrics.ExecutorJobStartsCounter = prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: "piro",
 		Subsystem: "executor",
 		Name:      "job_starts_total",
-		Help:      "Total amount of Job(s) executor tried to start.",
+		Help:      "Total amount of jobs executor tried to start.",
 	})
 	srv.metrics.ExecutorJobFailedStartsCounter = prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: "piro",
 		Subsystem: "executor",
 		Name:      "job_starts_failed_total",
-		Help:      "Total amount of Job(s) executor failed to start.",
+		Help:      "Total amount of jobs executor failed to start.",
 	})
-
-	// we might still have waiting Job(s) which we must load back into the executor
-	waitingJobs, _, err := srv.Jobs.Find(context.Background(), []*v1.FilterExpression{
-		{Terms: []*v1.FilterTerm{
-			{
-				Field:     "phase",
-				Value:     "waiting",
-				Operation: v1.FilterOp_OP_EQUALS,
-			},
-		}},
-	}, []*v1.OrderExpression{}, 0, 0)
-	if err != nil {
-		return xerrors.Errorf("cannot restore waiting Jobs: %w", err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	for _, j := range waitingJobs {
-		cancelJob := func(err error) {
-			log.WithError(err).Errorf("cannot restore waiting Job %s", j.Name)
-			j.Phase = v1.JobPhase_PHASE_DONE
-			j.Details = fmt.Sprintf("cannot restore execution context upon Bhojpur Piro restart: %v", err)
-			j.Conditions.Success = false
-			srv.handleJobUpdate(nil, &j)
-		}
-
-		jobYAML, err := srv.Jobs.GetJobSpec(j.Name)
-		if err != nil {
-			cancelJob(err)
-			continue
-		}
-		waitUntil := j.Conditions.WaitUntil.AsTime()
-		if err != nil {
-			cancelJob(err)
-			continue
-		}
-
-		md := j.Metadata
-		cp, err := srv.RepositoryProvider.ContentProvider(ctx, md.Repository)
-		if err != nil {
-			cancelJob(err)
-			continue
-		}
-		_, err = srv.RunJob(context.Background(), j.Name, md, cp, jobYAML, true, waitUntil)
-		if err != nil {
-			cancelJob(err)
-			continue
-		}
-	}
 
 	go srv.doHousekeeping()
 
 	return nil
 }
 
-// RegisterPrometheusMetrics registers the service metrics on the registerer
-// with MustRegister
+// RegisterPrometheusMetrics registers the service metrics on the registerer with MustRegister
 func (srv *Service) RegisterPrometheusMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(srv.metrics.GithubJobPreparationSeconds)
 	reg.MustRegister(srv.metrics.ExecutorJobPreperationSeconds)
@@ -219,6 +172,20 @@ func (srv *Service) doHousekeeping() {
 	tick := time.NewTicker(5 * time.Minute)
 	for {
 		log.Debug("performing Bhojpur Piro service housekeeping")
+
+		if srv.Config.GCOlderThan != nil {
+			olderThan := srv.Config.GCOlderThan.Duration
+			log.WithField("olderThan", olderThan.String()).Info("running garbage collection")
+
+			err := srv.Jobs.GarbageCollect(olderThan)
+			if err != nil {
+				log.WithError(err).Error("job GC error")
+			}
+			err = srv.Logs.GarbageCollect(olderThan)
+			if err != nil {
+				log.WithError(err).Error("log GC error")
+			}
+		}
 
 		ctx := context.Background()
 		expectedJobs, _, err := srv.Jobs.Find(ctx, []*v1.FilterExpression{{Terms: []*v1.FilterTerm{{Field: "phase", Value: "done", Operation: v1.FilterOp_OP_EQUALS, Negate: true}}}}, []*v1.OrderExpression{}, 0, 0)
@@ -243,10 +210,10 @@ func (srv *Service) doHousekeeping() {
 		for _, job := range expectedJobs {
 			knownStatus, exists := knownJobsIdx[job.Name]
 			if !exists {
-				log.WithField("name", job.Name).Warn("executor does not know about this Job - we have missed an event. Marking as failed.")
+				log.WithField("name", job.Name).Warn("executor does not know about this job - we have missed an event. Marking as failed.")
 				job.Phase = v1.JobPhase_PHASE_DONE
 				job.Conditions.Success = false
-				job.Details = "Bhojpur Piro missed updates for this Job, and the Job is no longer running."
+				job.Details = "Bhojpur Piro missed updates for this job and the job is no longer running."
 				srv.handleJobUpdate(nil, &job)
 				continue
 			}
@@ -282,14 +249,12 @@ func (srv *Service) handleJobUpdate(pod *corev1.Pod, s *v1.JobStatus) {
 			break
 		}
 	}
-	// We ignore all status updates from cleanup Job(s) - they are not user
-	// triggered and we do not want them polluting the system.
+	// We ignore all status updates from cleanup jobs - they are not user triggered and we do not want them polluting the system.
 	if isCleanupJob {
 		return
 	}
 
-	// ensure we have logging, e.g. re-establish joblog for unknown Job(s) (i.e.
-	// after a restart)
+	// ensure we have logging, e.g. reestablish joblog for unknown jobs (i.e. after restart)
 	srv.ensureLogging(s)
 
 	out, err := srv.Logs.Write(s.Name)
@@ -309,12 +274,11 @@ func (srv *Service) handleJobUpdate(pod *corev1.Pod, s *v1.JobStatus) {
 		fmt.Fprintf(out, "[piro:status] %s\n", jsonStatus)
 	}
 
-	// TODO make sure this runs only once, e.g. by improving the status
-	// computation s.t. we pass through starting
+	// TODO make sure this runs only once, e.g. by improving the status computation s.t. we pass through starting
 	// if s.Phase == v1.JobPhase_PHASE_RUNNING {
 	// out, err := srv.Logs.Place(context.TODO(), s.Name)
 	// if err == nil {
-	// 	fmt.Fprintln(out, "[running|PHASE] Job running")
+	// 	fmt.Fprintln(out, "[running|PHASE] job running")
 	// }
 	// }
 
@@ -327,7 +291,7 @@ func (srv *Service) handleJobUpdate(pod *corev1.Pod, s *v1.JobStatus) {
 			if jl.LogStore != nil {
 				jl.LogStore.Close()
 			}
-			srv.cleanupJobApplication(s)
+			srv.cleanupJobWorkspace(s)
 
 			delete(srv.logListener, s.Name)
 		}
@@ -337,7 +301,7 @@ func (srv *Service) handleJobUpdate(pod *corev1.Pod, s *v1.JobStatus) {
 	}
 	err = srv.Jobs.Store(context.Background(), *s)
 	if err != nil {
-		log.WithError(err).WithField("name", s.Name).Warn("cannot store Job")
+		log.WithError(err).WithField("name", s.Name).Warn("cannot store job")
 	}
 
 	// tell our Listen subscribers about this change
@@ -380,7 +344,7 @@ func (srv *Service) ensureLogging(s *v1.JobStatus) {
 	if !ok {
 		logs, err := srv.Logs.Open(s.Name)
 		if err != nil {
-			log.WithError(err).WithField("name", s.Name).Error("cannot (re-)establish logs for this Job")
+			log.WithError(err).WithField("name", s.Name).Error("cannot (re-)establish logs for this job")
 			return
 		}
 
@@ -395,7 +359,7 @@ func (srv *Service) ensureLogging(s *v1.JobStatus) {
 		go func() {
 			err := srv.listenToLogs(ctx, s.Name, srv.Executor.Logs(s.Name))
 			if err != nil && err != context.Canceled {
-				log.WithError(err).WithField("name", s.Name).Error("cannot listen to Job logs")
+				log.WithError(err).WithField("name", s.Name).Error("cannot listen to job logs")
 				jl.CancelExecutorListener = nil
 			}
 		}()
@@ -458,7 +422,7 @@ func (srv *Service) listenToLogs(ctx context.Context, name string, inc io.Reader
 
 			err := srv.Executor.RegisterResult(name, res)
 			if err != nil {
-				log.WithError(err).WithField("name", name).WithField("res", res).Warn("cannot record Job result")
+				log.WithError(err).WithField("name", name).WithField("res", res).Warn("cannot record job result")
 			}
 		case err := <-errchan:
 			if err != nil {
@@ -471,21 +435,21 @@ func (srv *Service) listenToLogs(ctx context.Context, name string, inc io.Reader
 	}
 }
 
-// RunJob starts a build Job from some context
-func (srv *Service) RunJob(ctx context.Context, name string, metadata *v1.JobMetadata, cp ContentProvider, jobYAML []byte, canReplay bool, waitUntil time.Time) (status *v1.JobStatus, err error) {
+// RunJob starts a build job from some context
+func (srv *Service) RunJob(ctx context.Context, name string, metadata v1.JobMetadata, spec v1.JobSpec, cp ContentProvider, jobYAML []byte, canReplay bool) (status *v1.JobStatus, err error) {
 	var logs io.WriteCloser
 	defer func(perr *error) {
 		if *perr != nil {
-			// make sure we tell the world about this failed Job startup attempt
+			// make sure we tell the world about this failed job startup attempt
 			if status == nil {
 				status = &v1.JobStatus{}
 			}
 			status.Name = name
 			status.Phase = v1.JobPhase_PHASE_DONE
 			status.Conditions = &v1.JobConditions{Success: false, FailureCount: 1}
-			status.Metadata = metadata
+			status.Metadata = &metadata
 			if status.Metadata.Created == nil {
-				status.Metadata.Created = timestamppb.Now()
+				status.Metadata.Created = ptypes.TimestampNow()
 			}
 			status.Details = (*perr).Error()
 			if logs != nil {
@@ -493,43 +457,43 @@ func (srv *Service) RunJob(ctx context.Context, name string, metadata *v1.JobMet
 			}
 		}
 
-		// either way, at the end of this function we must save the Job
+		// either way, at the end of this function we must save the job
 		serr := srv.Jobs.Store(context.Background(), *status)
 		if serr != nil {
-			log.WithError(serr).WithField("name", name).Warn("cannot save Job - this will break things")
+			log.WithError(serr).WithField("name", name).Warn("cannot save job - this will break things")
 		}
 		<-srv.events.Emit("job", status)
 	}(&err)
 
 	if canReplay {
 		// save job yaml
-		err = srv.Jobs.StoreJobSpec(name, jobYAML)
+		err = srv.Jobs.StoreJobSpec(name, spec, jobYAML)
 		if err != nil {
-			log.WithError(err).Warn("cannot store Job YAML - Job will not be replayable")
+			log.WithError(err).Warn("cannot store job YAML - job will not be replayable")
 		}
 	}
 
 	jobTpl, err := template.New("job").Funcs(sprig.TxtFuncMap()).Parse(string(jobYAML))
 	if err != nil {
-		return nil, xerrors.Errorf("cannot handle Job for %s: %w", name, err)
+		return nil, xerrors.Errorf("cannot handle job for %s: %w", name, err)
 	}
 
 	buf := bytes.NewBuffer(nil)
-	err = jobTpl.Execute(buf, newTemplateObj(name, metadata))
+	err = jobTpl.Execute(buf, newTemplateObj(name, &metadata))
 	if err != nil {
-		return nil, xerrors.Errorf("cannot handle Job for %s: %w", name, err)
+		return nil, xerrors.Errorf("cannot handle job for %s: %w", name, err)
 	}
 
 	// we have to use the Kubernetes YAML decoder to decode the podspec
 	var jobspec repoconfig.JobSpec
 	err = k8syaml.NewYAMLOrJSONDecoder(bytes.NewReader(buf.Bytes()), 4096).Decode(&jobspec)
 	if err != nil {
-		return nil, xerrors.Errorf("cannot handle Job for %s: %w", name, err)
+		return nil, xerrors.Errorf("cannot handle job for %s: %w", name, err)
 	}
 
 	podspec := jobspec.Pod
 	if podspec == nil {
-		return nil, xerrors.Errorf("cannot handle Job for %s: no podspec present", name)
+		return nil, xerrors.Errorf("cannot handle job for %s: no podspec present", name)
 	}
 
 	for _, s := range jobspec.Sidecars {
@@ -542,16 +506,16 @@ func (srv *Service) RunJob(ctx context.Context, name string, metadata *v1.JobMet
 		}
 
 		if !found {
-			return nil, xerrors.Errorf("pod has no container \"%s\", but the Job lists it as sidecar", s)
+			return nil, xerrors.Errorf("pod has no container \"%s\", but the job lists it as sidecar", s)
 		}
 	}
 
-	baVolume := "piro-application"
-	if srv.Config.ApplicationNodePathPrefix != "" {
-		nodePath := filepath.Join(srv.Config.ApplicationNodePathPrefix, name)
+	wsVolume := "piro-workspace"
+	if srv.Config.WorkspaceNodePathPrefix != "" {
+		nodePath := filepath.Join(srv.Config.WorkspaceNodePathPrefix, name)
 		httype := corev1.HostPathDirectoryOrCreate
 		podspec.Volumes = append(podspec.Volumes, corev1.Volume{
-			Name: baVolume,
+			Name: wsVolume,
 			VolumeSource: corev1.VolumeSource{
 				HostPath: &corev1.HostPathVolumeSource{
 					Path: nodePath,
@@ -561,7 +525,7 @@ func (srv *Service) RunJob(ctx context.Context, name string, metadata *v1.JobMet
 		})
 	} else {
 		podspec.Volumes = append(podspec.Volumes, corev1.Volume{
-			Name: baVolume,
+			Name: wsVolume,
 			VolumeSource: corev1.VolumeSource{
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
@@ -574,17 +538,17 @@ func (srv *Service) RunJob(ctx context.Context, name string, metadata *v1.JobMet
 	}
 	for i, ic := range ics {
 		ics[i].VolumeMounts = append(ic.VolumeMounts, corev1.VolumeMount{
-			Name:      baVolume,
+			Name:      wsVolume,
 			ReadOnly:  false,
-			MountPath: "/application",
+			MountPath: "/workspace",
 		})
 	}
 	podspec.InitContainers = append(podspec.InitContainers, ics...)
 	for i, c := range podspec.Containers {
 		podspec.Containers[i].VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{
-			Name:      baVolume,
+			Name:      wsVolume,
 			ReadOnly:  false,
-			MountPath: "/application",
+			MountPath: "/workspace",
 		})
 	}
 
@@ -595,7 +559,7 @@ func (srv *Service) RunJob(ctx context.Context, name string, metadata *v1.JobMet
 	srv.mu.Lock()
 	srv.logListener[name] = &jobLog{LogStore: logs}
 	srv.mu.Unlock()
-	fmt.Fprintln(logs, "[preparing|PHASE] Job preparation")
+	fmt.Fprintln(logs, "[preparing|PHASE] job preparation")
 
 	// dump podspec into logs
 	pw := textio.NewPrefixWriter(logs, "[piro:template] ")
@@ -615,19 +579,18 @@ func (srv *Service) RunJob(ctx context.Context, name string, metadata *v1.JobMet
 	k8sjson.NewYAMLSerializer(k8sjson.DefaultMetaFactory, nil, nil).Encode(&corev1.Pod{Spec: *redactedSpec}, pw)
 	pw.Flush()
 
-	// schedule/start Job
+	// schedule/start job
 	tExecutorPrepStart := time.Now()
-	status, err = srv.Executor.Start(*podspec, *metadata,
+	status, err = srv.Executor.Start(*podspec, metadata,
 		executor.WithName(name),
 		executor.WithCanReplay(canReplay),
-		executor.WithWaitUntil(waitUntil),
 		executor.WithMutex(jobspec.Mutex),
 		executor.WithSidecars(jobspec.Sidecars),
 	)
 	srv.metrics.ExecutorJobStartsCounter.Inc()
 	if err != nil {
 		srv.metrics.ExecutorJobFailedStartsCounter.Inc()
-		return nil, xerrors.Errorf("cannot handle Job for %s: %w", name, err)
+		return nil, xerrors.Errorf("cannot handle job for %s: %w", name, err)
 	}
 	name = status.Name
 	srv.metrics.ExecutorJobPreperationSeconds.Observe(time.Since(tExecutorPrepStart).Seconds())
@@ -640,12 +603,11 @@ func (srv *Service) RunJob(ctx context.Context, name string, metadata *v1.JobMet
 	return status, nil
 }
 
-// cleanupApplication starts a cleanup Job for a previously run Job
-func (srv *Service) cleanupJobApplication(s *v1.JobStatus) {
-	if srv.Config.ApplicationNodePathPrefix == "" {
-		// we don't have a Bhojpur.NET Platform application node path prefix,
-		// hence used an emptydir volume, therefore don't have to clean up
-		// after ourselves.
+// cleanupWorkspace starts a cleanup job for a previously run job
+func (srv *Service) cleanupJobWorkspace(s *v1.JobStatus) {
+	if srv.Config.WorkspaceNodePathPrefix == "" {
+		// we don't have a workspace node path prefix, hence used an emptydir volume,
+		// hence don't have to clean up after ourselves.
 		return
 	}
 
@@ -654,7 +616,7 @@ func (srv *Service) cleanupJobApplication(s *v1.JobStatus) {
 		Owner:      s.Metadata.Owner,
 		Repository: s.Metadata.Repository,
 		Trigger:    v1.JobTrigger_TRIGGER_UNKNOWN,
-		Created:    timestamppb.Now(),
+		Created:    ptypes.TimestampNow(),
 		Annotations: []*v1.Annotation{
 			{
 				Key:   annotationCleanupJob,
@@ -669,10 +631,10 @@ func (srv *Service) cleanupJobApplication(s *v1.JobStatus) {
 		podspec = corev1.PodSpec(*srv.Config.CleanupJobSpec)
 	}
 
-	nodePath := filepath.Join(srv.Config.ApplicationNodePathPrefix, name)
+	nodePath := filepath.Join(srv.Config.WorkspaceNodePathPrefix, name)
 	httype := corev1.HostPathDirectoryOrCreate
 	podspec.Volumes = append(podspec.Volumes, corev1.Volume{
-		Name: "piro-application",
+		Name: "piro-workspace",
 		VolumeSource: corev1.VolumeSource{
 			HostPath: &corev1.HostPathVolumeSource{
 				Path: nodePath,
@@ -683,19 +645,19 @@ func (srv *Service) cleanupJobApplication(s *v1.JobStatus) {
 	podspec.Containers = append(podspec.Containers, corev1.Container{
 		Name:       "cleanup",
 		Image:      "alpine:latest",
-		Command:    []string{"sh", "-c", "rm -rf *"},
-		WorkingDir: "/application",
+		Command:    []string{"sh", "-c", "rm -rf .* * 2>&-"},
+		WorkingDir: "/workspace",
 		VolumeMounts: []corev1.VolumeMount{
 			{
-				Name:      "piro-application",
-				MountPath: "/application",
+				Name:      "piro-workspace",
+				MountPath: "/workspace",
 			},
 		},
 	})
 	podspec.RestartPolicy = corev1.RestartPolicyOnFailure
 	_, err := srv.Executor.Start(podspec, md, executor.WithCanReplay(false), executor.WithBackoff(3), executor.WithName(fmt.Sprintf("cleanup-%s", name)))
 	if err != nil {
-		log.WithError(err).WithField("name", name).Error("cannot start cleanup Job")
+		log.WithError(err).WithField("name", name).Error("cannot start cleanup job")
 	}
 }
 

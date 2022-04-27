@@ -30,24 +30,23 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/bhojpur/piro/pkg/api/repoconfig"
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
 	"github.com/bhojpur/piro/pkg/filterexpr"
 	"github.com/bhojpur/piro/pkg/logcutter"
 	"github.com/bhojpur/piro/pkg/store"
+	"github.com/gogo/protobuf/proto"
 	termtohtml "github.com/buildkite/terminal-to-html"
 	log "github.com/sirupsen/logrus"
 	"github.com/technosophos/moniker"
 	"golang.org/x/xerrors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
 	"gopkg.in/yaml.v3"
 )
 
-// StartLocalJob starts a Kubernetes Job whoose content is uploaded
+// StartLocalJob starts a job whoose content is uploaded
 func (srv *Service) StartLocalJob(inc v1.PiroService_StartLocalJobServer) error {
 	req, err := inc.Recv()
 	if err != nil {
@@ -72,9 +71,9 @@ func (srv *Service) StartLocalJob(inc v1.PiroService_StartLocalJobServer) error 
 		phase      int
 	)
 	const (
-		phaseConfigYaml     = 0
-		phaseJobYaml        = 1
-		phaseApplicationTar = 2
+		phaseConfigYaml   = 0
+		phaseJobYaml      = 1
+		phaseWorkspaceTar = 2
 	)
 	for {
 		req, err = inc.Recv()
@@ -94,21 +93,21 @@ func (srv *Service) StartLocalJob(inc v1.PiroService_StartLocalJobServer) error 
 				phase = phaseJobYaml
 			}
 			if phase != phaseJobYaml {
-				return status.Error(codes.InvalidArgument, "expected Job yaml")
+				return status.Error(codes.InvalidArgument, "expected job yaml")
 			}
 
 			jobYAML = append(jobYAML, req.GetJobYaml()...)
 			continue
 		}
-		if req.GetApplicationTar() != nil {
+		if req.GetWorkspaceTar() != nil {
 			if phase == phaseJobYaml {
-				phase = phaseApplicationTar
+				phase = phaseWorkspaceTar
 			}
-			if phase != phaseApplicationTar {
-				return status.Error(codes.InvalidArgument, "expected application tar")
+			if phase != phaseWorkspaceTar {
+				return status.Error(codes.InvalidArgument, "expected workspace tar")
 			}
 
-			data := req.GetApplicationTar()
+			data := req.GetWorkspaceTar()
 			n, err := dfs.Write(data)
 			if err != nil {
 				return status.Error(codes.Internal, err.Error())
@@ -117,9 +116,9 @@ func (srv *Service) StartLocalJob(inc v1.PiroService_StartLocalJobServer) error 
 				return status.Error(codes.Internal, io.ErrShortWrite.Error())
 			}
 		}
-		if req.GetApplicationTarDone() {
-			if phase != phaseApplicationTar {
-				return status.Error(codes.InvalidArgument, "expected prior application tar")
+		if req.GetWorkspaceTarDone() {
+			if phase != phaseWorkspaceTar {
+				return status.Error(codes.InvalidArgument, "expected prior workspace tar")
 			}
 
 			break
@@ -129,7 +128,7 @@ func (srv *Service) StartLocalJob(inc v1.PiroService_StartLocalJobServer) error 
 	_, err = dfs.Seek(0, 0)
 
 	if len(configYAML) == 0 && len(jobYAML) == 0 {
-		return status.Error(codes.InvalidArgument, "either config or Job YAML must not be empty")
+		return status.Error(codes.InvalidArgument, "either config or job YAML must not be empty")
 	}
 
 	cp := &LocalContentProvider{
@@ -139,25 +138,25 @@ func (srv *Service) StartLocalJob(inc v1.PiroService_StartLocalJobServer) error 
 		Clientset:  srv.Executor.Client,
 	}
 
-	// Note: for local Jobs we DO NOT store the Job yaml as we cannot replay
-	// those Jobs anyways. The context upload is a one time thing and hence
-	// prevent job replay.
+	// Note: for local jobs we DO NOT store the job yaml as we cannot replay those jobs anyways.
+	//       The context upload is a one time thing and hence prevent job replay.
+
 	flatOwner := strings.ReplaceAll(strings.ToLower(md.Owner), " ", "")
 	name := cleanupPodName(fmt.Sprintf("local-%s-%s", flatOwner, moniker.New().NameSep("-")))
 
-	jobStatus, err := srv.RunJob(inc.Context(), name, &md, cp, jobYAML, false, time.Time{})
+	jobStatus, err := srv.RunJob(inc.Context(), name, md, v1.JobSpec{}, cp, jobYAML, false)
 
 	if err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
 
-	log.WithField("status", jobStatus).Info(("started new local Job"))
+	log.WithField("status", jobStatus).Info(("started new local job"))
 	return inc.SendAndClose(&v1.StartJobResponse{
 		Status: jobStatus,
 	})
 }
 
-// StartGitHubJob starts a Job on a Git context, possibly with a custom Job.
+// StartGitHubJob starts a job on a Git context, possibly with a custom job.
 func (srv *Service) StartGitHubJob(ctx context.Context, req *v1.StartGitHubJobRequest) (resp *v1.StartJobResponse, err error) {
 	if req.GithubToken != "" {
 		return nil, status.Errorf(codes.InvalidArgument, "Per-job GitHub tokens are no longer supported")
@@ -167,93 +166,101 @@ func (srv *Service) StartGitHubJob(ctx context.Context, req *v1.StartGitHubJobRe
 		req.Metadata.Repository.Host = "github.com"
 	}
 
-	return srv.StartJob(ctx, &v1.StartJobRequest{
-		JobPath:    req.JobPath,
-		JobYaml:    req.JobYaml,
-		Metadata:   req.Metadata,
-		Sideload:   req.Sideload,
-		WaitUntil:  req.WaitUntil,
-		NameSuffix: req.NameSuffix,
+	spec := &v1.JobSpec{
+		DirectSideload: req.Sideload,
+		NameSuffix:     req.NameSuffix,
+	}
+	if req.JobYaml != nil {
+		spec.Source = &v1.JobSpec_JobYaml{JobYaml: req.JobYaml}
+	} else {
+		spec.Source = &v1.JobSpec_JobPath{JobPath: req.JobPath}
+	}
+
+	return srv.StartJob2(ctx, &v1.StartJobRequest2{
+		Metadata: req.Metadata,
+		Spec:     spec,
 	})
 }
 
-// StartJob starts a new Kubernetes Job based on its specification.
-func (srv *Service) StartJob(ctx context.Context, req *v1.StartJobRequest) (resp *v1.StartJobResponse, err error) {
-	reqjson, err := (&protojson.MarshalOptions{UseEnumNumbers: true}).Marshal(req)
-	if err == nil {
-		log.WithField("StartJob request: ", reqjson)
-	}
+func (srv *Service) StartJob2(ctx context.Context, req *v1.StartJobRequest2) (resp *v1.StartJobResponse, err error) {
+	log.WithField("req", proto.MarshalTextString(req)).Info("StartJob request")
 
 	md := req.Metadata
-	err = srv.RepositoryProvider.Resolve(ctx, md.Repository)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "cannot resolve request: %q", err)
-	}
+	if md.Trigger == v1.JobTrigger_TRIGGER_DELETED {
+		// Note: attempting to resolve the reference after it's been deleted is
+		//       guaranteed to result in an error. Hence we're only doing this
+		//       if the trigger isn't DELETED.
+	} else {
+		err = srv.RepositoryProvider.Resolve(ctx, md.Repository)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "cannot resolve request: %q", err)
+		}
 
-	atns, err := srv.RepositoryProvider.RemoteAnnotations(ctx, md.Repository)
-	if err != nil {
-		return nil, err
-	}
-	for k, v := range atns {
-		md.Annotations = append(md.Annotations, &v1.Annotation{
-			Key:   k,
-			Value: v,
-		})
-	}
-
-	var cp ContentProvider
-	cp, err = srv.RepositoryProvider.ContentProvider(ctx, md.Repository)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "cannot produce content provider: %q", err)
-	}
-
-	if len(req.Sideload) > 0 {
-		cp = &SideloadingContentProvider{
-			Delegate: cp,
-
-			TarStream:  bytes.NewReader(req.Sideload),
-			Namespace:  srv.Executor.Config.Namespace,
-			Kubeconfig: srv.Executor.KubeConfig,
-			Clientset:  srv.Executor.Client,
+		atns, err := srv.RepositoryProvider.RemoteAnnotations(ctx, md.Repository)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range atns {
+			md.Annotations = append(md.Annotations, &v1.Annotation{
+				Key:   k,
+				Value: v,
+			})
 		}
 	}
 
-	var fp FileProvider
-	fp, err = srv.RepositoryProvider.FileProvider(ctx, md.Repository)
+	cp, err := srv.getContentProvider(ctx, md, req.Spec)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "cannot produce file provider: %q", err)
+		return nil, err
 	}
 
 	var (
-		jobYAML     = req.JobYaml
-		tplpath     = req.JobPath
+		jobYAML     []byte
+		jobPath     string
+		jobRepo     *v1.Repository
 		jobSpecName = "custom"
 	)
-	if jobYAML == nil {
-		if tplpath == "" {
+	switch src := req.Spec.Source.(type) {
+	case *v1.JobSpec_JobYaml:
+		jobYAML = src.JobYaml
+	case *v1.JobSpec_Repo:
+		jobPath = src.Repo.Path
+		jobRepo = src.Repo.Repo
+	case *v1.JobSpec_JobPath:
+		jobPath = src.JobPath
+		jobRepo = req.Metadata.Repository
+	default:
+		return nil, status.Errorf(codes.InvalidArgument, "unknown job source type")
+	}
+	if len(jobYAML) == 0 {
+		var fp FileProvider
+		fp, err = srv.RepositoryProvider.FileProvider(ctx, jobRepo)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "cannot produce file provider: %q", err)
+		}
+
+		if jobPath == "" {
 			repoCfg, err := getRepoCfg(ctx, fp)
 			if err != nil {
 				return nil, status.Error(codes.Internal, err.Error())
 			}
-			tplpath = repoCfg.TemplatePath(req.Metadata)
-		}
-		if tplpath == "" {
-			return nil, status.Errorf(codes.NotFound, "no jobspec found in repo config")
+			jobPath = repoCfg.TemplatePath(req.Metadata)
 		}
 
-		in, err := fp.Download(ctx, tplpath)
+		in, err := fp.Download(ctx, jobPath)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "cannot download jobspec from %s: %s", tplpath, err.Error())
+			return nil, status.Errorf(codes.Internal, "cannot download jobspec from %s: %s", jobPath, err.Error())
 		}
 		jobYAML, err = ioutil.ReadAll(in)
 		in.Close()
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "cannot download jobspec from %s: %s", tplpath, err.Error())
+			return nil, status.Errorf(codes.Internal, "cannot download jobspec from %s: %s", jobPath, err.Error())
+		}
+
+		if jobPath != "" {
+			jobSpecName = strings.TrimSpace(strings.TrimSuffix(filepath.Base(jobPath), filepath.Ext(jobPath)))
 		}
 	}
-	if tplpath != "" {
-		jobSpecName = strings.TrimSpace(strings.TrimSuffix(filepath.Base(tplpath), filepath.Ext(tplpath)))
-	}
+
 	md.JobSpecName = jobSpecName
 
 	// build job name
@@ -269,12 +276,12 @@ func (srv *Service) StartJob(ctx context.Context, req *v1.StartJobRequest) (resp
 		refname = moniker.New().NameSep("-")
 	}
 	name := cleanupPodName(fmt.Sprintf("%s-%s-%s", md.Repository.Repo, jobSpecName, refname))
-	if req.NameSuffix != "" {
-		if len(req.NameSuffix) > 20 {
+	if ns := req.Spec.NameSuffix; ns != "" {
+		if len(ns) > 20 {
 			return nil, status.Error(codes.InvalidArgument, "name suffix must be less than 20 characters")
 		}
 
-		name += "-" + req.NameSuffix
+		name += "-" + ns
 	}
 
 	if refname != "" {
@@ -287,36 +294,94 @@ func (srv *Service) StartJob(ctx context.Context, req *v1.StartJobRequest) (resp
 		name = fmt.Sprintf("%s.%d", name, t)
 	}
 
-	canReplay := len(req.Sideload) == 0
+	canReplay := true
 
-	var waitUntil time.Time
-	if req.WaitUntil != nil {
-		waitUntil = req.WaitUntil.AsTime()
-		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "waitUntil is invalid: %v", err)
-		}
-
-		if !canReplay {
-			return nil, status.Error(codes.InvalidArgument, "cannot delay the execution of non-replayable Jobs (i.e. jobs with custom GitHub token or sideload)")
-		}
-	}
-
-	jobStatus, err := srv.RunJob(ctx, name, md, cp, jobYAML, canReplay, waitUntil)
+	jobStatus, err := srv.RunJob(ctx, name, *md, *req.Spec, cp, jobYAML, canReplay)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	log.WithField("status", jobStatus).Info(("started new GitHub Job"))
+	log.WithField("status", jobStatus).Info(("started new job"))
 	return &v1.StartJobResponse{
 		Status: jobStatus,
 	}, nil
 }
 
+// getContentProvider produces a content provider for the given job spec
+func (srv *Service) getContentProvider(ctx context.Context, md *v1.JobMetadata, spec *v1.JobSpec) (ContentProvider, error) {
+	repo := *md.Repository
+	if md.Trigger == v1.JobTrigger_TRIGGER_DELETED {
+		// the ref/revision are pointless now, because the branch/tag was just deleted.
+		// We'll check out the default branch instead.
+		repo.Revision = ""
+		repo.Ref = md.Repository.DefaultBranch
+		if !strings.HasPrefix(repo.Ref, "refs/heads/") {
+			repo.Ref = "refs/heads/" + repo.Ref
+		}
+	}
+
+	var cp CompositeContentProvider
+	rcp, err := srv.RepositoryProvider.ContentProvider(ctx, &repo)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "cannot produce content provider: %q", err)
+	}
+	cp = append(cp, rcp)
+
+	if sl := spec.DirectSideload; len(sl) > 0 {
+		slc := &SideloadingContentProvider{
+			TarStream:  bytes.NewReader(sl),
+			Namespace:  srv.Executor.Config.Namespace,
+			Kubeconfig: srv.Executor.KubeConfig,
+			Clientset:  srv.Executor.Client,
+		}
+		cp = append(cp, slc)
+	}
+
+	if rl := spec.RepoSideload; len(rl) > 0 {
+		for i, repo := range rl {
+			if repo.Path == "" {
+				return nil, status.Errorf(codes.InvalidArgument, "repo sideload %d has no path", i)
+			}
+
+			rcp, err := srv.RepositoryProvider.ContentProvider(ctx, repo.Repo, repo.Path)
+			if err != nil {
+				return nil, status.Errorf(codes.FailedPrecondition, "cannot produce content provider: %q", err)
+			}
+
+			cp = append(cp, rcp)
+		}
+	}
+
+	return cp, nil
+}
+
+// StartJob starts a new job based on its specification.
+func (srv *Service) StartJob(ctx context.Context, req *v1.StartJobRequest) (resp *v1.StartJobResponse, err error) {
+	if req.WaitUntil != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "WaitUntil is no longer supported")
+	}
+
+	spec := &v1.JobSpec{
+		DirectSideload: req.Sideload,
+		NameSuffix:     req.NameSuffix,
+	}
+	if req.JobYaml != nil {
+		spec.Source = &v1.JobSpec_JobYaml{JobYaml: req.JobYaml}
+	} else {
+		spec.Source = &v1.JobSpec_JobPath{JobPath: req.JobPath}
+	}
+
+	return srv.StartJob2(ctx, &v1.StartJobRequest2{
+		Metadata: req.Metadata,
+		Spec:     spec,
+	})
+}
+
 func getRepoCfg(ctx context.Context, fp FileProvider) (*repoconfig.C, error) {
-	// download the Bhojpur Piro config from branch
+	// download Piro config from branch
 	piroYAML, err := fp.Download(ctx, PathPiroConfig)
 	if err != nil {
-		// TODO handle repos without the Bhojpur Piro config more gracefully
+		// TODO handle repos without Bhojpur Piro config more gracefully
 		return nil, xerrors.Errorf("cannot get repo config: %w", err)
 	}
 	var repoCfg repoconfig.C
@@ -336,9 +401,8 @@ func cleanupPodName(name string) string {
 	if len(name) > 58 {
 		// Kubernetes label values must not be longer than 63 characters according to
 		// https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
-		// We need to leave some space for the build number. Assuming that we
-		// won't have more than 9999 builds on a single long named branch,
-		// leaving four chars should be enough.
+		// We need to leave some space for the build number. Assuming that we won't have more than 9999 builds on
+		// a single long named branch, leaving four chars should be enough.
 		name = name[:58]
 	}
 
@@ -361,7 +425,7 @@ func cleanupPodName(name string) string {
 	return name
 }
 
-// StartFromPreviousJob starts a new Kubernetes Job based on an old one
+// StartFromPreviousJob starts a new job based on an old one
 func (srv *Service) StartFromPreviousJob(ctx context.Context, req *v1.StartFromPreviousJobRequest) (*v1.StartJobResponse, error) {
 	oldJobStatus, err := srv.Jobs.Get(ctx, req.PreviousJob)
 	if err == store.ErrNotFound {
@@ -370,12 +434,18 @@ func (srv *Service) StartFromPreviousJob(ctx context.Context, req *v1.StartFromP
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	jobYAML, err := srv.Jobs.GetJobSpec(req.PreviousJob)
+	jobSpec, jobYAML, err := srv.Jobs.GetJobSpec(req.PreviousJob)
 	if err == store.ErrNotFound {
 		return nil, status.Error(codes.NotFound, "job spec not found")
 	}
 	if err != nil {
+		log.WithError(err).WithField("req", req).Error("failed to start previous job")
 		return nil, status.Error(codes.Internal, err.Error())
+	}
+	if jobSpec == nil {
+		// this can happen for jobs which ran prior to the introduction
+		// of job specs.
+		return nil, status.Error(codes.FailedPrecondition, "job is too old and cannot be re-run")
 	}
 
 	name := req.PreviousJob
@@ -391,7 +461,7 @@ func (srv *Service) StartFromPreviousJob(ctx context.Context, req *v1.StartFromP
 
 	md := oldJobStatus.Metadata
 	md.Finished = nil
-	cp, err := srv.RepositoryProvider.ContentProvider(ctx, md.Repository)
+	cp, err := srv.getContentProvider(ctx, md, jobSpec)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -399,27 +469,18 @@ func (srv *Service) StartFromPreviousJob(ctx context.Context, req *v1.StartFromP
 	// We are replaying this job already - hence this new job is replayable as well
 	canReplay := true
 
-	var waitUntil time.Time
-	if req.WaitUntil != nil {
-		waitUntil = req.WaitUntil.AsTime()
-		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "waitUntil is invalid: %v", err)
-		}
-	}
-
-	jobStatus, err := srv.RunJob(ctx, name, oldJobStatus.Metadata, cp, jobYAML, canReplay, waitUntil)
+	jobStatus, err := srv.RunJob(ctx, name, *oldJobStatus.Metadata, *jobSpec, cp, jobYAML, canReplay)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	log.WithField("name", req.PreviousJob).WithField("old-name", name).Info(("started new Job from an old one"))
+	log.WithField("name", req.PreviousJob).WithField("old-name", name).Info(("started new job from an old one"))
 	return &v1.StartJobResponse{
 		Status: jobStatus,
 	}, nil
 }
 
-// newTarStreamAdapter creates a reader from an incoming Bhojpur.NET Platform
-// application tar stream
+// newTarStreamAdapter creates a reader from an incoming workspace tar stream
 func newTarStreamAdapter(inc v1.PiroService_StartLocalJobServer, initial []byte) io.Reader {
 	return &tarStreamAdapter{
 		inc:       inc,
@@ -441,7 +502,7 @@ func (tsa *tarStreamAdapter) Read(p []byte) (n int, err error) {
 		if err != nil {
 			return 0, err
 		}
-		data := msg.GetApplicationTar()
+		data := msg.GetWorkspaceTar()
 		if data == nil {
 			log.Debug("tar upload done")
 			return 0, io.EOF
@@ -458,7 +519,7 @@ func (tsa *tarStreamAdapter) Read(p []byte) (n int, err error) {
 	return n, nil
 }
 
-// ListJobs lists Kubernetes Job(s)
+// ListJobs lists jobs
 func (srv *Service) ListJobs(ctx context.Context, req *v1.ListJobsRequest) (resp *v1.ListJobsResponse, err error) {
 	result, total, err := srv.Jobs.Find(ctx, req.Filter, req.Order, int(req.Start), int(req.Limit))
 	if err != nil {
@@ -476,7 +537,7 @@ func (srv *Service) ListJobs(ctx context.Context, req *v1.ListJobsRequest) (resp
 	}, nil
 }
 
-// Subscribe listens to Kubernetes Job updates
+// Subscribe listens to job updates
 func (srv *Service) Subscribe(req *v1.SubscribeRequest, resp v1.PiroService_SubscribeServer) (err error) {
 	evts := srv.events.On("job")
 	for evt := range evts {
@@ -492,7 +553,7 @@ func (srv *Service) Subscribe(req *v1.SubscribeRequest, resp v1.PiroService_Subs
 	return nil
 }
 
-// GetJob returns the information about a particular Kubernetes Job
+// GetJob returns the information about a particular job
 func (srv *Service) GetJob(ctx context.Context, req *v1.GetJobRequest) (resp *v1.GetJobResponse, err error) {
 	job, err := srv.Jobs.Get(ctx, req.Name)
 	if err != nil {
@@ -581,10 +642,8 @@ func (srv *Service) Listen(req *v1.ListenRequest, ls v1.PiroService_ListenServer
 			defer wg.Done()
 
 			if job.Phase == v1.JobPhase_PHASE_DONE {
-				// The Kubernetes Job we're listening on is already done. To
-				// provide the same behaviour as if the Job were still running,
-				// we first have to dump out all the logs and then send the one
-				// final status update.
+				// The job we're listening on is already done. To provide the same behaviour as if the job were still running,
+				// we first have to dump out all the logs and then send the one final status update.
 				logwg.Wait()
 
 				ls.Send(&v1.ListenResponse{
@@ -626,7 +685,7 @@ func (srv *Service) Listen(req *v1.ListenRequest, ls v1.PiroService_ListenServer
 	return err
 }
 
-// StopJob stops a running Kubernetes Job
+// StopJob stops a running job
 func (srv *Service) StopJob(ctx context.Context, req *v1.StopJobRequest) (*v1.StopJobResponse, error) {
 	job, err := srv.Jobs.Get(ctx, req.Name)
 	if err != nil {

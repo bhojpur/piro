@@ -18,9 +18,9 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PiroUIClient interface {
-	// ListJobSpecs returns a list of Job(s) that can be started through the Piro UI.
+	// ListJobSpecs returns a list of jobs that can be started through the UI.
 	ListJobSpecs(ctx context.Context, in *ListJobSpecsRequest, opts ...grpc.CallOption) (PiroUI_ListJobSpecsClient, error)
-	// IsReadOnly returns true if the Piro UI is readonly.
+	// IsReadOnly returns true if the UI is readonly.
 	IsReadOnly(ctx context.Context, in *IsReadOnlyRequest, opts ...grpc.CallOption) (*IsReadOnlyResponse, error)
 }
 
@@ -77,9 +77,9 @@ func (c *piroUIClient) IsReadOnly(ctx context.Context, in *IsReadOnlyRequest, op
 // All implementations must embed UnimplementedPiroUIServer
 // for forward compatibility
 type PiroUIServer interface {
-	// ListJobSpecs returns a list of Job(s) that can be started through the Piro UI.
+	// ListJobSpecs returns a list of jobs that can be started through the UI.
 	ListJobSpecs(*ListJobSpecsRequest, PiroUI_ListJobSpecsServer) error
-	// IsReadOnly returns true if the Piro UI is readonly.
+	// IsReadOnly returns true if the UI is readonly.
 	IsReadOnly(context.Context, *IsReadOnlyRequest) (*IsReadOnlyResponse, error)
 	mustEmbedUnimplementedPiroUIServer()
 }

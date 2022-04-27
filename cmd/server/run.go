@@ -41,6 +41,7 @@ import (
 
 	rice "github.com/GeertJohan/go.rice"
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
+	"github.com/bhojpur/piro/pkg/auth"
 	piro "github.com/bhojpur/piro/pkg/engine"
 	"github.com/bhojpur/piro/pkg/executor"
 	"github.com/bhojpur/piro/pkg/logcutter"
@@ -49,6 +50,7 @@ import (
 	"github.com/bhojpur/piro/pkg/store/postgres"
 	"github.com/bhojpur/piro/pkg/version"
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
+	"github.com/open-policy-agent/opa/rego"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -61,10 +63,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
-
-var theServer *v1.PiroServiceServer
-var service *piro.Service
-var theUIServer *v1.PiroUIServer
 
 // runCmd represents the run command
 var runCmd = &cobra.Command{
@@ -87,7 +85,7 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
-		log.Info("connecting to Bhojpur Piro database")
+		log.Info("connecting to database")
 		db, err := sql.Open("postgres", cfg.Storage.JobStore)
 		if err != nil {
 			return err
@@ -146,7 +144,7 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
-		log.Info("connecting to Kubernetes instance")
+		log.Info("connecting to kubernetes")
 		exec, err := executor.NewExecutor(execCfg, kubeConfig)
 		if err != nil {
 			return err
@@ -165,8 +163,10 @@ var runCmd = &cobra.Command{
 			cfg.Piro.DebugProxy = val
 		}
 
-		log.Info("starting Plugins installed locally")
-		plugins, err := plugin.Start(cfg.Plugins, theServer, service)
+		var uiservice = &struct {
+			v1.PiroUIServer
+		}{}
+		plugins, err := plugin.Start(cfg.Plugins, service, uiservice)
 		if err != nil {
 			log.WithError(err).Fatal("cannot start plugins")
 		}
@@ -186,34 +186,57 @@ var runCmd = &cobra.Command{
 			}
 		}
 
-		uiservice, err := piro.NewUIService(plugins.RepositoryProvider(), cfg.Service.JobSpecRepos, cfg.Service.WebReadOnly, specUpdateInterval)
+		actualUIservice, err := piro.NewUIService(plugins.RepositoryProvider(), cfg.Service.JobSpecRepos, cfg.Service.WebReadOnly, specUpdateInterval)
 		if err != nil {
 			return err
 		}
+		uiservice.PiroUIServer = actualUIservice
 
-		log.Info("starting Bhojpur Piro server instance")
 		err = service.Start()
 		if err != nil {
-			log.WithError(err).Fatal("cannot start Bhojpur Piro service")
+			log.WithError(err).Fatal("cannot start service")
 		}
 
-		grpcOpts := []grpc.ServerOption{
-			// We don't know how good our cients are at closing connections. If
-			// they don't close them properly we'll be leaking goroutines left
-			// and right. Closing the Idle connections should prevent that. If a
-			// client gets disconnected because nothing happened for 15 minutes
-			// (e.g. no log output, no new job), the client can simply reconnect
-			// if they're still interested. WebUI is pretty good at maintaining
-			// connections anyways.
-			grpc.KeepaliveParams(keepalive.ServerParameters{MaxConnectionIdle: 15 * time.Minute}),
+		var (
+			unaryInterceptor  []grpc.UnaryServerInterceptor
+			streamInterceptor []grpc.StreamServerInterceptor
+		)
+		if cfg.Service.APIPolicy.Enabled {
+			var policy func(*rego.Rego)
+			switch {
+			case cfg.Service.APIPolicy.Bundle != "":
+				policy = rego.LoadBundle(cfg.Service.APIPolicy.Bundle)
+			case len(cfg.Service.APIPolicy.Paths) != 0:
+				policy = rego.Load(cfg.Service.APIPolicy.Paths, nil)
+			default:
+				log.Fatal("API policy is enabled byt neither bundle nor paths are set")
+			}
+
+			icp, err := auth.NewOPAInterceptor(context.Background(), plugins.AuthProvider(), policy)
+			if err != nil {
+				return err
+			}
+			unaryInterceptor = append(unaryInterceptor, icp.Unary())
+			streamInterceptor = append(streamInterceptor, icp.Stream())
 		}
-		log.Info("starting Bhojpur Piro gRPC server instance")
-		go startGRPC(*theServer, service, fmt.Sprintf(":%d", cfg.Service.GRPCPort), grpcOpts...)
-		log.Info("starting Bhojpur Piro web server instance")
-		go startWeb(theServer, theUIServer, uiservice, fmt.Sprintf(":%d", cfg.Service.WebPort), startWebOpts{
+
+		// We don't know how good our cients are at closing connections. If they don't close them properly
+		// we'll be leaking goroutines left and right. Closing Idle connections should prevent that.
+		// If a client gets disconnected because nothing happened for 15 minutes (e.g. no log output, no new job),
+		// the client can simply reconnect if they're still interested. WebUI is pretty good at maintaining
+		// connections anyways.
+		keepAlive := grpc.KeepaliveParams(keepalive.ServerParameters{MaxConnectionIdle: 15 * time.Minute})
+		grpcOpts := []grpc.ServerOption{
+			keepAlive,
+			grpc.ChainUnaryInterceptor(unaryInterceptor...),
+			grpc.ChainStreamInterceptor(streamInterceptor...),
+		}
+
+		go startGRPC(service, fmt.Sprintf(":%d", cfg.Service.GRPCPort), grpcOpts...)
+		go startWeb(service, actualUIservice, fmt.Sprintf(":%d", cfg.Service.WebPort), startWebOpts{
 			DebugProxy:  cfg.Piro.DebugProxy,
 			ReadOpsOnly: cfg.Service.WebReadOnly,
-			GRPCOpts:    grpcOpts,
+			GRPCOpts:    []grpc.ServerOption{keepAlive},
 			Plugins:     plugins,
 		})
 
@@ -253,7 +276,7 @@ var runCmd = &cobra.Command{
 
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-		log.Info("Bhojpur Piro server is up and running. Stop with SIGINT or CTRL+C")
+		log.Info("Bhojpur Piro is up and running. Stop with SIGINT or CTRL+C")
 		<-sigChan
 		log.Info("Received SIGINT - shutting down")
 
@@ -268,8 +291,8 @@ type startWebOpts struct {
 	Plugins     http.Handler
 }
 
-// startWeb starts the Bhojpur Piro web UI service
-func startWeb(svr *v1.PiroServiceServer, uisvr *v1.PiroUIServer, uiservice *piro.UIService, addr string, opts startWebOpts) {
+// startWeb starts the Bhojur Piro web UI service
+func startWeb(service *piro.Service, uiservice v1.PiroUIServer, addr string, opts startWebOpts) {
 	var webuiServer http.Handler
 	if opts.DebugProxy != "" {
 		tgt, err := url.Parse(opts.DebugProxy)
@@ -278,13 +301,12 @@ func startWeb(svr *v1.PiroServiceServer, uisvr *v1.PiroUIServer, uiservice *piro
 			panic(err)
 		}
 
-		log.WithField("target", tgt).Debug("proxying to WebUI server")
+		log.WithField("target", tgt).Debug("proxying to webui server")
 		webuiServer = httputil.NewSingleHostReverseProxy(tgt)
 	} else {
-		// The Bhojpur Piro WebUI is a single-page app, hence any path that
-		// does not resolve to a static file must result in /index.html. As a
-		// (rather crude) fix we intercept the response writer to find out if
-		// the FileServer returned an error. If so we return /index.html instead.
+		// WebUI is a single-page app, hence any path that does not resolve to a static file must result in /index.html.
+		// As a (rather crude) fix we intercept the response writer to find out if the FileServer returned an error. If so
+		// we return /index.html instead.
 		dws := http.FileServer(rice.MustFindBox("../../pkg/webui/build").HTTPBox())
 		webuiServer = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			dws.ServeHTTP(&interceptResponseWriter{
@@ -314,8 +336,8 @@ func startWeb(svr *v1.PiroServiceServer, uisvr *v1.PiroUIServer, uiservice *piro
 	}
 
 	grpcServer := grpc.NewServer(grpcOpts...)
-	v1.RegisterPiroServiceServer(grpcServer, *theServer)
-	v1.RegisterPiroUIServer(grpcServer, *theUIServer)
+	v1.RegisterPiroServiceServer(grpcServer, service)
+	v1.RegisterPiroUIServer(grpcServer, uiservice)
 	grpcWebServer := grpcweb.WrapServer(grpcServer)
 
 	mux := http.NewServeMux()
@@ -331,24 +353,24 @@ func startWeb(svr *v1.PiroServiceServer, uisvr *v1.PiroUIServer, uiservice *piro
 	log.WithField("addr", addr).Info("serving Bhojpur Piro web service")
 	err := http.ListenAndServe(addr, mux)
 	if err != nil {
-		log.WithField("addr", addr).WithError(err).Warn("cannot serve Bhojpur Piro web service")
+		log.WithField("addr", addr).WithError(err).Warn("cannot serve web service")
 	}
 }
 
-// startGRPC starts the Bhojpur Piro - gRPC service
-func startGRPC(service v1.PiroServiceServer, svc *piro.Service, addr string, opts ...grpc.ServerOption) {
+// startGRPC starts the Bhojpur Piro gRPC service
+func startGRPC(service v1.PiroServiceServer, addr string, opts ...grpc.ServerOption) {
 	grpcServer := grpc.NewServer(opts...)
 	v1.RegisterPiroServiceServer(grpcServer, service)
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.WithError(err).Error("cannot start Bhojpur Piro - gRPC server")
+		log.WithError(err).Error("cannot start gRPC server")
 	}
 
-	log.WithField("addr", addr).Info("serving Bhojpur Piro - gRPC service")
+	log.WithField("addr", addr).Info("serving Bhojpur Piro gRPC service")
 	err = grpcServer.Serve(lis)
 	if err != nil {
-		log.WithError(err).Error("cannot start Bhojpur Piro - gRPC server")
+		log.WithError(err).Error("cannot start gRPC server")
 	}
 }
 
@@ -382,7 +404,7 @@ func startPProf(addr string) {
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
-	log.WithField("addr", addr).Info("serving Bhojpur Piro profiler service")
+	log.WithField("addr", addr).Info("serving pprof service")
 	err := http.ListenAndServe(addr, mux)
 	if err != nil {
 		log.WithField("addr", addr).WithError(err).Warn("cannot serve pprof service")
@@ -403,7 +425,7 @@ func serveVersion(w http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(w).Encode(info)
 }
 
-// hstsHandler wraps an http.HandlerFunc such that it sets the HSTS header.
+// hstsHandler wraps an http.HandlerFunc sfuch that it sets the HSTS header.
 func hstsHandler(fn http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
@@ -490,6 +512,11 @@ type Config struct {
 		JobSpecRepos       []string `yaml:"jobSpecRepos"`
 		SpecUpdateInterval string   `yaml:"specUpdateInterval"`
 		WebReadOnly        bool     `yaml:"webReadOnly,omitempty"`
+		APIPolicy          struct {
+			Enabled bool     `yaml:"enabled"`
+			Bundle  string   `yaml:"bundle"`
+			Paths   []string `yaml:"paths"`
+		} `yaml:"apiPolicy,omitempty"`
 	}
 	Storage struct {
 		LogStore                   string `yaml:"logsPath"`

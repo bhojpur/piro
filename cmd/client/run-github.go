@@ -24,7 +24,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -34,11 +33,11 @@ import (
 
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
 	"github.com/bhojpur/piro/pkg/reporef"
+	"github.com/golang/protobuf/ptypes"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const maxSideloadSizeBytes = 3 * 1024 * 1024
@@ -118,7 +117,7 @@ var runGithubCmd = &cobra.Command{
 			return err
 		}
 		if waitUntil != nil {
-			req.WaitUntil = timestamppb.New(*waitUntil)
+			req.WaitUntil, err = ptypes.TimestampProto(*waitUntil)
 			if err != nil {
 				return err
 			}
@@ -128,7 +127,11 @@ var runGithubCmd = &cobra.Command{
 		defer conn.Close()
 		client := v1.NewPiroServiceClient(conn)
 
-		ctx := context.Background()
+		ctx, cancel, err := getRequestContext(md)
+		if err != nil {
+			return err
+		}
+		defer cancel()
 		resp, err := client.StartGitHubJob(ctx, req)
 		if err != nil {
 			if status.Code(err) == codes.NotFound {
@@ -142,7 +145,7 @@ var runGithubCmd = &cobra.Command{
 		follow, _ := flags.GetBool("follow")
 		withPrefix, _ := flags.GetString("follow-with-prefix")
 		if follow || withPrefix != "" {
-			err = followJob(client, resp.Status.Name, withPrefix)
+			err = followJob(ctx, client, resp.Status.Name, withPrefix)
 			if err != nil {
 				return err
 			}

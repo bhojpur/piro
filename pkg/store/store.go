@@ -24,6 +24,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
 )
@@ -52,28 +53,34 @@ type Logs interface {
 	// Callers are supposed to close the reader once done.
 	// Reading from logs currently being written is supported.
 	Read(id string) (io.ReadCloser, error)
+
+	// GarbageCollect removes all logs older than the given duration.
+	GarbageCollect(olderThan time.Duration) error
 }
 
-// Jobs provides access to past Jobs
+// Jobs provides access to past jobs
 type Jobs interface {
-	// Store stores schedulable Kubernetes Job information in the Memory / DB store.
-	// Storing a Job whose name we already have in store will override the previously
-	// stored Job.
+	// Store stores job information in the store.
+	// Storing a job whose name we already have in store will override the previously
+	// stored job.
 	Store(ctx context.Context, job v1.JobStatus) error
 
-	// StoreJobSpec stores Job YAML data.
-	StoreJobSpec(name string, data []byte) error
+	// StoreJobSpec stores job YAML data.
+	StoreJobSpec(name string, spec v1.JobSpec, data []byte) error
 
-	// Retrieves a particular Kubernetes Job bassd on its name.
-	// If the Kubernetes Job is unknown we'll return ErrNotFound.
+	// Retrieves a particular job bassd on its name.
+	// If the job is unknown we'll return ErrNotFound.
 	Get(ctx context.Context, name string) (*v1.JobStatus, error)
 
-	// Get retrieves previously stored Kubernetes Job spec data
-	GetJobSpec(name string) (data []byte, err error)
+	// Get retrieves previously stored job spec data
+	GetJobSpec(name string) (spec *v1.JobSpec, data []byte, err error)
 
-	// Searches for Kubernetes Jobs based on their annotations. If filter is
-	// empty no filter is applied. If limit is 0, no limit is applied.
+	// Searches for jobs based on their annotations. If filter is empty no filter is applied.
+	// If limit is 0, no limit is applied.
 	Find(ctx context.Context, filter []*v1.FilterExpression, order []*v1.OrderExpression, start, limit int) (slice []v1.JobStatus, total int, err error)
+
+	// GarbageCollect removes all logs older than the given duration.
+	GarbageCollect(olderThan time.Duration) error
 }
 
 // NumberGroup enables to atomic generation and storage of numbers.

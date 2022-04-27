@@ -29,13 +29,14 @@ import (
 
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
 	"github.com/bhojpur/piro/pkg/store"
+	"github.com/gogo/protobuf/jsonpb"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
-	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
-// JobStore stores jobs in a PostgreSQL database
+// JobStore stores jobs in a Postgres database
 type JobStore struct {
 	DB *sql.DB
 
@@ -49,11 +50,13 @@ func NewJobStore(db *sql.DB) (*JobStore, error) {
 	res := &JobStore{DB: db}
 	res.metrics.PostgresStoreJobDurationSecond = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "job_store_store_duration_second",
-		Help:    "Time it takes to store a Job status",
+		Help:    "Time it takes to store a job status",
 		Buckets: prometheus.ExponentialBuckets(0.001, 10, 4),
 	})
 	return res, nil
 }
+
+var _ store.Jobs = &JobStore{}
 
 // RegisterPrometheusMetrics registers metrics on the registerer with MustRegister
 func (s *JobStore) RegisterPrometheusMetrics(reg prometheus.Registerer) {
@@ -61,33 +64,43 @@ func (s *JobStore) RegisterPrometheusMetrics(reg prometheus.Registerer) {
 		s.metrics.PostgresStoreJobDurationSecond,
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 			Name: "job_store_db_open_connections_total",
-			Help: "Open database connections of the Job store.",
+			Help: "Open database connections of the job store.",
 		}, func() float64 { return float64(s.DB.Stats().OpenConnections) }),
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 			Name: "job_store_db_inuse_connections_total",
-			Help: "Open database connections of the Job store which are in use.",
+			Help: "Open database connections of the job store which are in use.",
 		}, func() float64 { return float64(s.DB.Stats().InUse) }),
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 			Name: "job_store_db_idle_connections_total",
-			Help: "Open database connections of the Job store which are idleing.",
+			Help: "Open database connections of the job store which are idleing.",
 		}, func() float64 { return float64(s.DB.Stats().Idle) }),
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 			Name: "job_store_db_waiting_queries_total",
-			Help: "Number of waiting new DB connections of the Job store.",
+			Help: "Number of waiting new DB connections of the job store.",
 		}, func() float64 { return float64(s.DB.Stats().WaitCount) }),
 	)
 }
 
-// Store stores Kubernetes Job information in the store.
-func (s *JobStore) Store(ctx context.Context, job *v1.JobStatus) error {
+// GarbageCollect removes all job entries older than the specified duration
+func (s *JobStore) GarbageCollect(olderThan time.Duration) error {
+	_, err := s.DB.Query(`
+		DELETE FROM job_status 
+		WHERE created <= $1
+		  AND phase = 'done'
+	`, time.Now().Add(-olderThan).Unix())
+	return err
+}
+
+// Store stores job information in the store.
+func (s *JobStore) Store(ctx context.Context, job v1.JobStatus) error {
 	defer func(start time.Time) {
 		s.metrics.PostgresStoreJobDurationSecond.Observe(time.Since(start).Seconds())
 	}(time.Now())
 
-	marshaler := &protojson.MarshalOptions{
-		UseEnumNumbers: true,
+	marshaler := &jsonpb.Marshaler{
+		EnumsAsInts: true,
 	}
-	serializedJob, err := marshaler.Marshal(job)
+	serializedJob, err := marshaler.MarshalToString(&job)
 	if err != nil {
 		return err
 	}
@@ -159,8 +172,7 @@ func (s *JobStore) Get(ctx context.Context, name string) (*v1.JobStatus, error) 
 	}
 
 	var res v1.JobStatus
-	unmarshaler := &protojson.UnmarshalOptions{}
-	err = unmarshaler.Unmarshal([]byte(data), &res)
+	err = jsonpb.UnmarshalString(data, &res)
 	if err != nil {
 		return nil, err
 	}
@@ -284,8 +296,7 @@ func (s *JobStore) Find(ctx context.Context, filter []*v1.FilterExpression, orde
 		}
 
 		var res v1.JobStatus
-		unmarshaler := &protojson.UnmarshalOptions{}
-		err = unmarshaler.Unmarshal([]byte(data), &res)
+		err = jsonpb.UnmarshalString(data, &res)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -299,17 +310,22 @@ func (s *JobStore) Find(ctx context.Context, filter []*v1.FilterExpression, orde
 	return result, total, nil
 }
 
-// StoreJobSpec stores Job information in the store.
-func (s *JobStore) StoreJobSpec(name string, data []byte) error {
+// StoreJobSpec stores job information in the store.
+func (s *JobStore) StoreJobSpec(name string, spec v1.JobSpec, data []byte) error {
+	rawSpec, err := proto.Marshal(&spec)
+	if err != nil {
+		return err
+	}
 	rows, err := s.DB.Query(`
 		INSERT
-		INTO   job_spec (name, data)
-		VALUES          ($1  , $2  ) 
+		INTO   job_spec (name, data, spec)
+		VALUES          ($1  , $2  , $3  ) 
 		ON CONFLICT (name) DO UPDATE 
-			SET data = $2
+			SET data = $2, spec = $3
 		`,
 		name,
 		data,
+		rawSpec,
 	)
 	if err != nil {
 		return err
@@ -319,16 +335,28 @@ func (s *JobStore) StoreJobSpec(name string, data []byte) error {
 	return nil
 }
 
-// GetJobSpec retrieves a particular Job bassd on its name.
-func (s *JobStore) GetJobSpec(name string) ([]byte, error) {
-	var data []byte
-	err := s.DB.QueryRow("SELECT data FROM job_spec WHERE name = $1", name).Scan(&data)
+// GetJobSpec retrieves a particular job bassd on its name.
+func (s *JobStore) GetJobSpec(name string) (*v1.JobSpec, []byte, error) {
+	var (
+		rawSpec []byte
+		data    []byte
+	)
+	err := s.DB.QueryRow("SELECT spec, data FROM job_spec WHERE name = $1", name).Scan(&rawSpec, &data)
 	if err == sql.ErrNoRows {
-		return nil, store.ErrNotFound
+		return nil, nil, store.ErrNotFound
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return data, nil
+	var spec *v1.JobSpec
+	if len(rawSpec) != 0 {
+		spec = &v1.JobSpec{}
+		err = proto.Unmarshal(rawSpec, spec)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return spec, data, nil
 }

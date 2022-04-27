@@ -26,9 +26,10 @@ import (
 
 	v1 "github.com/bhojpur/piro/pkg/api/v1"
 	"github.com/bhojpur/piro/pkg/prettyprint"
+	"github.com/gogo/protobuf/proto"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -70,17 +71,10 @@ func prettyPrint(obj proto.Message, defaultTpl string) error {
 	return ctnt.Print()
 }
 
-func getLocalContextJobFilter() ([]*v1.FilterExpression, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return nil, err
+func getMetadataFilter(md *v1.JobMetadata) ([]*v1.FilterExpression, error) {
+	if md == nil {
+		return nil, nil
 	}
-
-	md, err := getLocalJobContext(wd, v1.JobTrigger_TRIGGER_MANUAL)
-	if err != nil {
-		return nil, xerrors.Errorf("cannot get local job context: %w", err)
-	}
-
 	return []*v1.FilterExpression{
 		{Terms: []*v1.FilterTerm{{Field: "repo.owner", Value: md.Repository.Owner}}},
 		{Terms: []*v1.FilterTerm{{Field: "repo.repo", Value: md.Repository.Repo}}},
@@ -88,11 +82,12 @@ func getLocalContextJobFilter() ([]*v1.FilterExpression, error) {
 	}, nil
 }
 
-func findJobByLocalContext(ctx context.Context, client v1.PiroServiceClient) (name string, err error) {
-	filter, err := getLocalContextJobFilter()
+func findJobByMetadata(ctx context.Context, md *v1.JobMetadata, client v1.PiroServiceClient) (name string, err error) {
+	filter, err := getMetadataFilter(md)
 	if err != nil {
 		return "", err
 	}
+	log.WithField("filter", filter).Debug("listing jobs")
 
 	resp, err := client.ListJobs(ctx, &v1.ListJobsRequest{
 		Filter: filter,

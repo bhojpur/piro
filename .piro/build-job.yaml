@@ -2,7 +2,7 @@ mutex: build-{{ .Repository.Revision }}
 pod:
   containers:
   - name: build
-    image: golang:1.13-alpine
+    image: golang:1.16-alpine
     workingDir: /application
     imagePullPolicy: IfNotPresent
     command:

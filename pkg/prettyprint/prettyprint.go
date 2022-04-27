@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"io"
 
-	"google.golang.org/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 )
 
 // Format defines the kind of pretty-printing format we want to use

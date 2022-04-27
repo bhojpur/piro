@@ -1,5 +1,4 @@
 //go:generate sh -c "[ -f ../../../_deps/pkg-store-postgres--rice/rice-box.go ] && cp ../../../_deps/pkg-store-postgres--rice/rice-box.go ."
-// +generate sh -c "[ -f ../../../_deps/pkg-store-postgres--rice/rice-box.go ] && cp ../../../_deps/pkg-store-postgres--rice/rice-box.go ."
 
 // Copyright (c) 2018 Bhojpur Consulting Private Limited, India. All rights reserved.
 
