@@ -10,7 +10,8 @@ pod:
       - -c
       - |
         apk add --no-cache sed curl go yarn git coreutils
-        curl -L https://github.com/bhojpur/gorpa/releases/download/v0.0.5/gorpa_0.0.5_Linux_x86_64.tar.gz | tar xz
+        curl -L https://github.com/bhojpur/gorpa/releases/download/v1.0.0/gorpa-v1.0.0-Linux-x86_64
+        mv gorpa-v1.0.0-Linux-x86_64 gorpa
         chmod +x gorpa
         export PATH=$PWD:$PATH
         cd /application

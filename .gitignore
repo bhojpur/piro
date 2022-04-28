@@ -1,3 +1,5 @@
 /.vscode
+/bin
 dist/
+
 **/rice-box.go

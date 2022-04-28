@@ -64,8 +64,8 @@ var rootCmdOpts struct {
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:          "piroctl",
-	Short:        "Bhojpur Piro is a Git triggered, Kubernetes powered CI system for Bhojpur.NET Platform",
+	Use:          "piro",
+	Short:        "Bhojpur Piro client is a Git triggered, Kubernetes powered, continuous integration/deployment system for Bhojpur.NET Platform",
 	SilenceUsage: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if rootCmdOpts.Verbose {

@@ -497,7 +497,7 @@ func (*unlimitedRateLimiter) Wait(ctx context.Context) error {
 func init() {
 	rootCmd.AddCommand(runCmd)
 
-	runCmd.Flags().String("debug-webui-proxy", "", "proxies the web UI to this address")
+	runCmd.Flags().String("debug-webui-proxy", "", "proxies the web user interface to this address")
 	runCmd.Flags().Bool("verbose", false, "enable verbose debug output")
 }
 

@@ -36,6 +36,7 @@ import (
 
 // UIService implements api/v1/PiroUIServer
 type UIService struct {
+	v1.UnimplementedPiroUIServer
 	RepositoryProvider RepositoryProvider
 	Repos              []string
 	Readonly           bool

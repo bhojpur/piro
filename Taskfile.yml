@@ -9,28 +9,32 @@ tasks:
         - echo "{{.GREETING}}"
         silent: true
 
-    build-web:
+    build-tools:
         desc: Build the web application
         cmds:
-        - GOFLAGS=-mod=mod go build -o bin/piroctl client.go 
+        - GOFLAGS=-mod=mod go build -o bin/piro client.go 
+        - chmod 755 bin/piro
+        - cp bin/piro $GOPATH/bin
         - GOFLAGS=-mod=mod go build -o bin/pirosvr server.go 
+        - chmod 755 bin/pirosvr
+        - cp bin/pirosvr $GOPATH/bin
 
     build-desktop:
         desc: Build the desktop application for current OS
         cmds:
-        - guiutl package -os macos -icon piro.png
-        - guiutl package -os linux -icon piro.png
-        - guiutl package -os windows -icon piro.png
+        - guiutl package -name "Bhojpur Piro" -os macos -icon piro.png
+        - guiutl package -name "Bhojpur Piro" -os linux -icon piro.png
+        - guiutl package -name "Bhojpur Piro" -os windows -icon piro.png
 
     package-android:
         desc: Package the mobile application for Android
         cmds:
-        - guiutl package -os android -appID net.bhojpur.piro -icon piro.png
+        - guiutl package -name "Bhojpur Piro" -name "Bhojpur Piro" -os android -appID net.bhojpur.piro -icon piro.png
 
     package-ios:
         desc: Package the mobile application for iOS
         cmds:
-        - guiutl package -os ios -appID net.bhojpur.piro -icon piro.png
+        - guiutl package -name "Bhojpur Piro" -os ios -appID net.bhojpur.piro -icon piro.png
 
     release-macos:
         desc: Release the native application for macOS App Store
@@ -72,6 +76,8 @@ tasks:
         cmds:
         - protoc --go_out=plugins=grpc:. --go_opt=paths=source_relative pkg/api/v1/piro.proto
         - protoc --go_out=plugins=grpc:. --go_opt=paths=source_relative pkg/api/v1/piro-ui.proto
+        - protoc --go_out=plugins=grpc:. --go_opt=paths=source_relative pkg/plugin/common/auth-pligin.proto
+        - protoc --go_out=plugins=grpc:. --go_opt=paths=source_relative pkg/plugin/common/repo-pligin.proto
 
     test:
         desc: Execute all the Unit Tests

@@ -21,7 +21,9 @@ package cmd
 // THE SOFTWARE.
 
 import (
-	"github.com/bhojpur/piro/pkg/version"
+	"fmt"
+
+	stamping "github.com/bhojpur/piro/pkg/version"
 	"github.com/spf13/cobra"
 )
 
@@ -30,7 +32,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Prints the version of this Bhojpur Piro executable binary image",
 	Run: func(cmd *cobra.Command, args []string) {
-		version.Print()
+		fmt.Println("pirosvr " + stamping.FullVersion())
 	},
 }
 

@@ -1,8 +1,20 @@
 # Bhojpur Piro - Continuous Integration
 
-A pre-integrated CI/CD system driving many web scale applications and/or services running over the [Bhojpur.NET Platform](https://github.com/bhojpur/platform). On one side, it uses any standard Git repository and drive the _Jobs_ using either Kubernetes/Docker and/or NanoVMs on the other side. It knows no pipelines, just the _Jobs_ and each _Job_ could be a Unikernel application and/or Kubernetes **Pod**. What you do in that _Unikernel_ or _Pod_ is up to you. We do not impose any "declarative pipeline syntax" or some groovy scripting language. Instead, the Bhojpur Piro jobs have run Node, Golang, or Bash scripts in production environments.
+A _pre-integrated_ `CI/CD` system driving many web scale `applications` or `services`
+running over the [Bhojpur.NET Platform](https://github.com/bhojpur/platform). On one
+side, it uses any standard `Git` repository and drives the _Jobs_ using either a
+`Kubernetes` cluster of `Docker` containers or `MicroVM`s or `NanoVM`s on the other
+side. It knows no [pipelines](https://github.com/bhojpur/belaur), just the _Jobs_ and
+each _Job_ could be a [Unikernel](https://github.com/bhojpur/kernel) application and
+`Kubernetes` **Pod**. What you do in that _Unikernel_ or _Pod_ is up to you. We do not
+impose any "declarative pipeline syntax" or some groovy scripting language. Instead,
+the `Bhojpur Piro` jobs have managed to run `Node`, `Go`, or `Bash` scripts in the
+production environments.
 
-Any standard Git repository (e.g. [Bhojpur Seam](https://seam.in.bhojpur.net)) could be integrated with the Bhojpur Piro. Though it is present already in your [Bhojpur.NET Platform](https://github.com/bhojpur/platform) instance, but different variants are built already to suit requirments of specific industry sector.
+Any standard Git repository (e.g. [Bhojpur Seam](https://seam.in.bhojpur.net)) could
+be integrated with the `Bhojpur Piro`. Though, it is present already in your
+[Bhojpur.NET Platform](https://github.com/bhojpur/platform) instance, but different
+variants are built already to suit requirments of specific industry sector.
 
 ---
 
@@ -25,25 +37,26 @@ Any standard Git repository (e.g. [Bhojpur Seam](https://seam.in.bhojpur.net)) c
 
 ## Installation
 
-The easiest way to install the Bhojpur Piro is using its [Helm chart](helm/).
+The easiest way to install the `Bhojpur Piro` is using its [Helm chart](helm/).
 Clone this Git repository, cd into `helm/`, and install using following steps
 
-```
+```bash
 helm dep update
 helm upgrade --install piro .
 ```
 
-### Git-hoster integration
+### Git-hoster Integration
 
-The Bhojpur Piro integrates with standard Git hosting platforms using its plugin system.
-Currently, Bhojpur Piro ships with support for GitHub only ([plugins/github-repo](https://repositories.github.com/bhojpur/piro/tree/cw/repo-plugins/plugins/github-repo) and [plugins/github-trigger](https://repositories.github.com/bhojpur/piro/tree/cw/repo-plugins/plugins/github-trigger)).
+The `Bhojpur Piro` integrates with standard Git hosting platforms using its
+plugin system. Currently, `Bhojpur Piro` ships with support for `GitHub` only
+([plugins/github-repo](https://repositories.github.com/bhojpur/piro/tree/cw/repo-plugins/plugins/github-repo) and [plugins/github-trigger](https://repositories.github.com/bhojpur/piro/tree/cw/repo-plugins/plugins/github-trigger)).
 
 To add support for other Git hoster, the `github-repo` plugin is a good starting point.
 
 #### GitHub
 
-To use the Bhojpur Piro with the GitHub, you'll need a GitHub app.
-To create the app, please [follow the steps here](https://developer.repositories.github.com/apps/building-github-apps/creating-a-github-app/).
+To use the `Bhojpur Piro` with the GitHub, you'll need a GitHub application. To create
+the app, please [follow the steps here](https://developer.repositories.github.com/apps/building-github-apps/creating-a-github-app/).
 
 When creating the app, please use following values:
 
@@ -63,7 +76,9 @@ the domain should match your installation's `config.baseURL` |
 
 ### Configuration
 
-The following table lists the (incomplete set of) configurable parameters of the Bhojpur Piro chart and their default values. The Helm chart's `values.yaml` is the reference for chart's configuration surface.
+The following table lists the (incomplete set of) configurable parameters of the
+`Bhojpur Piro` chart and their default values. The Helm chart's `values.yaml` is
+the reference for chart's configuration surface.
 
 | Parameter | Description | Default |
 | --------- | ----------- | ------- |
@@ -85,7 +100,8 @@ The following table lists the (incomplete set of) configurable parameters of the
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
 
-Alternatively, a YAML file that specifies the values for the above parameters can be provided while installing the chart. For example,
+Alternatively, a `YAML` file that specifies the values for the above parameters
+can be provided while installing the chart. For example,
 
 ```console
 helm install --name my-release -f values.yaml .
@@ -95,17 +111,22 @@ helm install --name my-release -f values.yaml .
 
 ### OAuth
 
-The Bhojpur Piro does not support OAuth by itself. However, using [OAuth Proxy](https://github.com/oauth2-proxy/oauth2-proxy) that's easy enough to add. It could leverage [Bhojpur Web](https://github.com/bhojpur/web) for full fledged support for enterprise grade product features.
+The `Bhojpur Piro` does not support `OAuth` by itself. However, using a standard
+[OAuth Proxy](https://github.com/oauth2-proxy/oauth2-proxy) that's easy enough to
+add. It could leverage [Bhojpur IAM](https://github.com/bhojpur/iam) for full
+fledged support for enterprise grade product features.
 
 ## Setting up Jobs
 
-The Bhojpur Piro _jobs_ are files in your Git repository where one file represents one Job.
-A Bhojpur Piro job file mainly consists of the [PodSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#podspec-v1-core)
-that will be run. The Bhojpur Piro will add an `/application` mount to your _pod_ where you'll find the checked out repository the job is running on.
+The `Bhojpur Piro` _jobs_ are files in your `Git` repository where one file represents
+one Job. A `Bhojpur Piro` job file mainly consists of the
+[PodSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#podspec-v1-core)
+that will be run. The `Bhojpur Piro` will add an `/application` mount to your _pod_
+where you'll find the checked out repository the job is running on.
 
 For example:
 
-```YAML
+```yaml
 pod:
   containers:
   - name: hello-world
@@ -120,17 +141,20 @@ pod:
       ls
 ```
 
-This job would print Hello World and list all files in the root of the repository.
+This `Job` would print **Hello World** and list all files in the `root` of
+the repository.
 
-Checkout [Bhojpur Piro's own build job](.piro/build-job.yaml) for a more complete example.
+Checkout `Bhojpur Piro`'s own [build job](.piro/build-job.yaml) for a more complete
+example.
 
-> **Tip**: You can use the Bhojpur Piro CLI to create a new _Job_ using `piro init job`
+> **Tip**: You can use the `Bhojpur Piro` CLI to create a new _Job_ using `piro init job`
 
 ### GitHub events
 
-The Bhojpur Piro starts _jobs_ based on GitHub push events, if the repository contains a `.piro/config.yaml` file, e.g.
+The `Bhojpur Piro` starts _jobs_ based on GitHub push events, if the repository
+contains a `.piro/config.yaml` file, e.g.
 
-```YAML
+```yaml
 defaultJob: ".piro/build-job.yaml"
 rules:
 - path: ".piro/deploy.yaml"
@@ -139,13 +163,16 @@ rules:
   - or: ["trigger !== deleted"]
 ```
 
-The example above starts `.piro/deploy.yaml` for all tags. For everything else it will start `.piro/build-job.yaml`.
+The example above starts `.piro/deploy.yaml` for all tags. For everything else
+it will start `.piro/build-job.yaml`.
 
 ## Log Cutting
 
-The Bhojpur Piro extracts structure from the log output its jobs produce. We call this process log cutting, because the Bhojpur Piro understands logs as a bunch of streams/slices which have to be demultiplexed.
+The `Bhojpur Piro` extracts structure from the log output its jobs produce. We
+call this process log cutting, because the `Bhojpur Piro` understands logs as a
+bunch of streams/slices, which have to be de-multiplexed.
 
-The default cutter in the Bhojpur Piro expects the following syntax:
+The default **cutter** in the `Bhojpur Piro` expects the following syntax:
 
 | Code | Command | Description |
 | --------- | ----- | ----------- |
@@ -156,26 +183,29 @@ The default cutter in the Bhojpur Piro expects the following syntax:
 | `[type\|RESULT] content` | Publish a result | Publishes `content` as result of type `type`
 
 <<<<<<< HEAD
-> **Tip**: You can produce this kind of log output using the Bhojpur Piro CLI: `piro log`
+> **Tip**: You can produce this kind of log output using the `Bhojpur Piro` CLI: `piro log`
 <<<<<<< HEAD
 
 <<<<<<< HEAD
+
 ## Command Line Interface
 
-The Bhojpur Piro sports a powerful continuous integration capability, which can be used to create, list, start and listen to jobs (e.g. Unikernel applications or services) applied in complex data processing.
+The `Bhojpur Piro` sports a powerful continuous integration capability, which can
+be used to create, list, start and listen to jobs (e.g. `Unikernel` applications
+or services) applied in complex data processing.
 
+### Direct Installation
 
-### Installation
-
-The Bhojpur Piro CLI is available on the [GitHub release page](https://repositories.github.com/bhojpur/piro/releases), or using this one-liner:
+The `Bhojpur Piro` CLI is available in binary format on the [release](https://github.com/bhojpur/piro/releases/)
+page or using this one-liner:
 
 ```bash
-curl -L bhojpur.net/get-cli.sh | sh
+curl -L https://get.bhojpur.net/piro/install.sh | sh
 ```
 
-### Usage
+### Simple Usage
 
-```
+```bash
 The Bhojpur Piro is a very simple GitHub triggered, Unikernel and/or Kubernetes powered CI system.
 
 Usage:
@@ -199,13 +229,15 @@ Use "piro [command] --help" for more information about a command.
 
 ## Annotations
 
-Annotations are used by your Bhojpur Piro _job_ to make runtime decisions. The Bhojpur Piro supports passing annotation in three ways:
+Annotations are used by your `Bhojpur Piro` _job_ to make runtime decisions.
+`Bhojpur Piro` supports passing annotation in three ways:
 
 1. From Pull Request description
 
-You can add annotations in the following form to your Pull Request description and the Bhojpur Piro will pick them up
+You can add `annotations` in the following form to your Pull Request description
+and the `Bhojpur Piro` will pick them up
 
-```sh
+```bash
 /piro someAnnotation
 /piro someAnnotation=foobar
 - [x] /piro someAnnotation
@@ -214,14 +246,27 @@ You can add annotations in the following form to your Pull Request description a
 
 2. From Git commit
 
-The Bhojpur Piro supports same format as above to pass annotations via commit message. The Bhojpur Piro will use the top most commit only.
+The `Bhojpur Piro` supports same format as above to pass annotations via commit
+message. The `Bhojpur Piro` will use the top most commit only.
 
-3. From CLI
+3. From Bhojpur CLI
 
-```sh
+```bash
 piro run github -a someAnnotation=foobar
 ```
 
-## Thank You
+## Build Source Code
 
-Thank you to our contributors.
+You need `Go` programming language tools. Issue the following commands in a termainal
+after gloning this `Git` repository. It will build and embedd the web user interface
+and package the PostgreSQL database scripts.
+
+```bash
+./prepare.sh
+```
+
+then, you can build the `Bhojpur Piro` CLI using following commands
+
+```bash
+task build-tools
+```

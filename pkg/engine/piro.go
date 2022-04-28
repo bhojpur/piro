@@ -101,6 +101,7 @@ type jobLog struct {
 
 // Service ties everything together
 type Service struct {
+	v1.UnimplementedPiroServiceServer
 	Logs               store.Logs
 	Jobs               store.Jobs
 	Groups             store.NumberGroup

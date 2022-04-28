@@ -1,0 +1,78 @@
+project_name: piro
+before:
+  hooks:
+    - go mod tidy
+dist: release
+source:
+  enabled: true
+  name_template: '{{ .ProjectName }}-{{ .Tag }}-source'
+checksum:
+  name_template: '{{ .ProjectName }}-{{ .Tag }}-checksums.txt'
+builds:
+- id: piro
+  env:
+  - CGO_ENABLED=0
+  main: client.go
+  binary: piro
+  ldflags:
+  - -s -w
+  - -X "github.com/bhojpur/piro/pkg/version.Version={{.Version}}-{{.ShortCommit}}"
+  - -X "github.com/bhojpur/piro/pkg/version.BuildTime={{ time "2006-01-02 15:04:05 MST" }}"
+  - -X "github.com/bhojpur/piro/pkg/version.BuildCommit={{ .FullCommit }}"
+- id: pirosvr
+  env:
+  - CGO_ENABLED=0
+  main: server.go
+  binary: pirosvr
+  ldflags:
+  - -s -w
+  - -X "github.com/bhojpur/piro/pkg/version.Version={{.Version}}-{{.ShortCommit}}"
+  - -X "github.com/bhojpur/piro/pkg/version.BuildTime={{ time "2006-01-02 15:04:05 MST" }}"
+  - -X "github.com/bhojpur/piro/pkg/version.BuildCommit={{ .FullCommit }}"
+archives:
+- id: piro
+  files:
+  - "none*"
+  format: binary # this removes the tar of the archives, leaving the binaries alone
+  name_template: piro-{{ .Tag }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}
+  replacements:
+    darwin: Darwin
+    linux: Linux
+    386: i386
+    amd64: x86_64
+  builds:
+  - piro
+- id: pirosvr
+  files:
+  - "none*"
+  format: binary # this removes the tar of the archives, leaving the binaries alone
+  name_template: pirosvr-{{ .Tag }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}
+  builds:
+  - pirosvr
+  replacements:
+    darwin: Darwin
+    linux: Linux
+    386: i386
+    amd64: x86_64
+snapshot:
+  name_template: "{{ .Tag }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+    - '^docs:'
+    - '^test:'
+release:
+  prerelease: auto
+  header: |
+    Bhojpur Piro is a pre-integrated CI/CD system driving many web scale applications
+    and services running over the Bhojpur.NET Platform.
+dockers:
+  - goos: linux
+    goarch: amd64
+    goarm: ''
+    dockerfile: Dockerfile
+    image_templates:
+    - "ghcr.io/bhojpur/piro:{{ .Tag }}"
+    extra_files:
+    - README.md

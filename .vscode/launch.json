@@ -2,19 +2,8 @@
     // Use IntelliSense to learn about possible attributes.
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "go.gopath": "/Volumes/Software/go",
-    "go.toolsEnvVars": {
-        "GOARCH":"amd64",
-        "GOOS":"linux",
-    },
-    "go.testEnvVars": {
-        "GOARCH":"amd64",
-        "GOOS":"linux",
-    },
-    "go.installDependenciesWhenBuilding": false,
+    "version": "1.0.0",
     "configurations": [
-        
         {
             "name": "Launch",
             "type": "go",

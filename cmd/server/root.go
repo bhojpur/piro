@@ -33,7 +33,7 @@ var verbose bool
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "pirosvr",
-	Short: "Bhojpur Piro is a Git triggered, Kubernetes powered CI system for Bhojpur.NET Platform",
+	Short: "Bhojpur Piro server is a Git repository triggered, Kubernetes powered, continuous integration/deployent system for Bhojpur.NET Platform",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if verbose {
 			log.SetLevel(log.DebugLevel)
